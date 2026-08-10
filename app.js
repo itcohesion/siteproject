@@ -40,7 +40,7 @@ app.addEventListener("click", handleClick);
 app.addEventListener("change", handleChange);
 app.addEventListener("input", handleInput);
 
-render();
+queueMicrotask(render);
 
 function createInitialState() {
   return {
@@ -713,7 +713,7 @@ function renderIntroView() {
         <strong>Цель методики</strong> - получить комплексный набор показателей психологических предикторов, влияющих на совместную деятельность.<br><br>
         Опрос собран в один поток, в котором 4 методики, анализирующие:<br>
         Готовность к сотрудничеству<br>
-        Доверие к людям<br>
+        Доверие/недоверие к людям<br>
         Тип реагирования на ситуацию изменений<br>
         Показатели профессиональной мотивации.
       </div>
@@ -724,8 +724,8 @@ function renderIntroView() {
           <p>Первый опрос измеряет степень готовности к сотрудничеству в совместной деятельности.</p>
         </section>
         <section class="intro-tile">
-          <h3>2. Доверие к людям</h3>
-          <p>Далее идёт методика Купрейченко с двумя оценками на каждом утверждении.</p>
+          <h3>2. Доверие/недоверие к людям</h3>
+          <p>Методика позволяет оценить степень и профиль доверия к людям в разрезе 6 компонентов.</p>
         </section>
         <section class="intro-tile">
           <h3>3. Тип реагирования на ситуацию изменений</h3>
@@ -733,7 +733,7 @@ function renderIntroView() {
         </section>
         <section class="intro-tile">
           <h3>4. Показатели профессиональной мотивации</h3>
-          <p>Финальный опрос отражает автономную, контролируемую мотивацию и общий индекс RAI.</p>
+          <p>Финальный опрос отражает профиль профессиональной мотивации в разрезе компонентов и интегральных показателей.</p>
         </section>
       </div>
 
@@ -749,10 +749,10 @@ function renderIntroView() {
 
 function renderPassportView() {
   return `
-    <article class="main-card">
+    <article class="main-card" id="results-top">
       <div class="section-head">
         <h2 class="section-title">Профиль участника</h2>
-        <p class="section-copy">Заполните короткие сведения о себе. Эти данные будут сохранены вместе с ответами и войдут в итоговый JSON.</p>
+        <p class="section-copy">Заполните короткие сведения о себе, чтобы результаты можно было связать с контекстом работы.</p>
       </div>
 
       <div class="passport-grid" role="form" aria-label="Профиль участника">
@@ -940,6 +940,123 @@ function renderMethodQuestionCard(methodKey, method, item, absoluteIndex) {
   `;
 }
 
+const kupreychenkoComponentDefinitions = [
+  { label: "Надежность", description: "Убеждение, что человек надёжен." },
+  { label: "Единство", description: "Единый взгляд на мир и общие ценности." },
+  { label: "Знание", description: "Убеждённость в понимании человека и его предсказуемости." },
+  { label: "Приязнь", description: "Чувство привязанности, принятия, любви." },
+  { label: "Расчет", description: "Доверие, основанное на рациональном расчете." },
+  { label: "Недостатки", description: "Представления о недостатках другого человека." },
+];
+
+const trsiFactorDefinitions = [
+  { label: "Освоение изменений", description: "Реализующий тип 1." },
+  { label: "Преодоление трудностей", description: "Реализующий тип 2." },
+  { label: "Стремление к изменениям", description: "Инновационный тип 1." },
+  { label: "Предпочтение неопределенности", description: "Инновационный тип 2." },
+  { label: "Избегание изменений", description: "Реактивный тип." },
+  { label: "Упреждение изменений", description: "Консервативный тип 1." },
+  { label: "Сохранение стабильности", description: "Консервативный тип 2." },
+];
+
+const trsiInterpretationDefinitions = [
+  {
+    label: "Принятие изменений",
+    description: "Включает освоение изменений, преодоление трудностей, стремление к изменениям и предпочтение неопределённости.",
+  },
+  {
+    label: "Непринятие изменений",
+    description: "Включает избегание изменений, упреждение изменений и сохранение стабильности.",
+  },
+];
+
+const trsiGroupDefinitions = [
+  {
+    label: "Принятие изменений",
+    description: "Объединяет освоение изменений, преодоление трудностей, стремление к изменениям и предпочтение неопределенности.",
+  },
+  {
+    label: "Непринятие изменений",
+    description: "Объединяет избегание изменений, упреждение изменений и сохранение стабильности.",
+  },
+];
+
+const trsiDetailedDefinitions = [
+  {
+    label: "Освоение изменений",
+    description: "Определяет быструю адаптацию к переменам, позитивные эмоции и способность легко перестроить деятельность в новых условиях.",
+  },
+  {
+    label: "Преодоление трудностей",
+    description: "Включает уверенность в успешном разрешении проблемных ситуаций и стремление извлечь пользу даже в случае неудачного опыта.",
+  },
+  {
+    label: "Стремление к изменениям",
+    description: "Описывает высокую значимость и потребность в переменах, привлекательность ситуации изменений и интерес к новизне.",
+  },
+  {
+    label: "Предпочтение неопределенности",
+    description: "Предполагает толерантность к неопределенности, удовольствие от быстрой смены событий и способность к импровизации.",
+  },
+  {
+    label: "Избегание изменений",
+    description: "Описывает сильные негативные эмоции в ситуации перемен: тревогу, страх, панику, внутреннее сопротивление и ощущение потери сил и ресурсов.",
+  },
+  {
+    label: "Упреждение изменений",
+    description: "Характеризует негативное отношение к переменам, связанное с отрицательными прогнозами и фокусированием на препятствиях; направлено на предотвращение изменений.",
+  },
+  {
+    label: "Сохранение стабильности",
+    description: "Предполагает стремление сохранить или вернуть стабильность, попытки применять ранее разработанные алгоритмы действий и тщательное планирование жизненных событий.",
+  },
+];
+
+const kupreychenkoTypeDefinitions = [
+  {
+    label: "Понимающий людей",
+    description: "Характерен низкой дифференциацией и высокими показателями по компоненту «Знание».",
+  },
+  {
+    label: "Сильно дифференцирующий людей",
+    description: "Отличается высокой дифференциацией оценок доверия и недоверия.",
+  },
+  {
+    label: "Доверяющий на основе надежности и приязни",
+    description: "Характерен высокими оценками по компоненту «Знание» и большой диверсификацией оценок недостатков.",
+  },
+  {
+    label: "Амбивалентно доверяющий",
+    description: "Одновременно высоко оценивает недостатки человека, которому доверяет, и позитивные компоненты доверия: Знание, Приязнь, Единство, Расчет.",
+  },
+  {
+    label: "Недифференцирующий людей",
+    description: "Отличается низкой дифференциацией показателей и низкой оценкой Расчета в отношениях с человеком, которому доверяют больше всего, при высоких оценках этой шкалы в отношениях с тем, кто доверия не оправдал.",
+  },
+];
+
+const opm2ScaleDefinitions = [
+  { label: "Внутренняя мотивация", description: "Стремление заниматься профессией исходя из искреннего интереса и стремления к личным достижениям в этой сфере." },
+  { label: "Интегрированная регуляция", description: "Увязывание профессиональной деятельности с другими важными областями жизни и создание целостной картины личности." },
+  { label: "Идентифицированная регуляция", description: "Наличие четких представлений о целях карьеры и сознательный выбор направления профессиональной деятельности." },
+  { label: "Интроецированная регуляция", description: "Принятие норм и правил организации под воздействием внутренних санкций и наказаний." },
+  { label: "Экстернальная регуляция", description: "Мотивы деятельности основаны преимущественно на внешних вознаграждениях или страхе негативных последствий." },
+  { label: "Амотивация", description: "Отсутствие заинтересованности и восприятия смысла в выполняемой работе." },
+];
+
+function renderDefinitionGrid(items) {
+  return `
+    <div class="definition-grid">
+      ${items.map((item) => `
+        <article class="definition-item">
+          <h4>${escapeHtml(item.label)}</h4>
+          <p>${escapeHtml(item.description)}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderReview() {
   const payload = buildPayload();
   const followupChecked = state.followup.wantDetailedReport ? "checked" : "";
@@ -954,7 +1071,7 @@ function renderReview() {
       </div>
 
       <div class="summary-grid">
-                <section class="summary-card summary-card-wide">
+        <section class="summary-card summary-card-wide">
           <h3>Степень готовности к сотрудничеству</h3>
           <div class="summary-value">${cooperationScore} / 25</div>
           <p class="summary-help">${cooperationLevel.label} готовность (${cooperationLevel.range})</p>
@@ -964,7 +1081,7 @@ function renderReview() {
           ${renderCooperationGauge(cooperationScore)}
         </section>
 
-                <section class="summary-card summary-card-wide">
+        <section class="summary-card summary-card-wide">
           <h3>Доверие и недоверие к людям (Купрейченко)</h3>
           <div class="summary-value">${roundScore(payload.derived.kupreychenko.trust.overall)} / ${roundScore(payload.derived.kupreychenko.distrust.overall)}</div>
           <p class="summary-help">Зелёный контур показывает доверие, оранжевый - недоверие. На радаре видны обе оценки по каждому фактору.</p>
@@ -973,10 +1090,13 @@ function renderReview() {
             <li><span>Недоверие</span><strong>${roundScore(payload.derived.kupreychenko.distrust.overall)}</strong></li>
             <li><span>Дельта</span><strong>${roundScore(payload.derived.kupreychenko.balance)}</strong></li>
           </ul>
+          <div class="block-links">
+            <a class="text-link" href="#kupreychenko-types">Перейти к типам доверия</a>
+          </div>
           ${renderKupreychenkoChartPanel(payload.kupreychenko.scores)}
         </section>
 
-                <section class="summary-card summary-card-wide">
+        <section class="summary-card summary-card-wide">
           <h3>Типы реагирования на ситуацию изменений (ТРСИ)</h3>
           <div class="summary-value">${roundScore(payload.derived.trsi.acceptance)} / ${roundScore(payload.derived.trsi.rejection)}</div>
           <p class="summary-help">Средние значения по семи шкалам показывают профиль реагирования на изменения.</p>
@@ -985,20 +1105,51 @@ function renderReview() {
             <li><span>Непринятие изменений</span><strong>${roundScore(payload.derived.trsi.rejection)}</strong></li>
             <li><span>Баланс</span><strong>${roundScore(payload.derived.trsi.balance)}</strong></li>
           </ul>
+          <div class="block-links">
+            <a class="text-link" href="#trsi-meaning">Перейти к пояснению ТРСИ</a>
+          </div>
           ${renderTrsiChartPanel(payload.trsi.scores)}
         </section>
-<section class="summary-card summary-card-wide">
+
+        <section class="summary-card summary-card-wide">
           <h3>ОПМ-2</h3>
-          <div class="summary-value">RAI ${formatSignedScore(payload.derived.opm2.rai)}</div>
+          <div class="summary-value">Индекс относительной автономии ${formatSignedScore(payload.derived.opm2.rai)}</div>
           <p class="summary-help">Положительное значение означает, что автономная мотивация выражена сильнее контролируемой.</p>
           <ul class="details-list">
             <li><span>Автономная</span><strong>${roundScore(payload.derived.opm2.autonomous)}</strong></li>
             <li><span>Контролируемая</span><strong>${roundScore(payload.derived.opm2.controlled)}</strong></li>
-            <li><span>RAI</span><strong>${roundScore(payload.derived.opm2.rai)}</strong></li>
+            <li><span>Индекс относительной автономии</span><strong>${roundScore(payload.derived.opm2.rai)}</strong></li>
           </ul>
           ${renderOpm2ChartPanel(payload.opm2.scores)}
         </section>
       </div>
+
+      <div class="result-links">
+        <a class="text-link" href="#kupreychenko-types">Типы доверия по Купрейченко</a>
+        <a class="text-link" href="#trsi-meaning">Пояснение к ТРСИ</a>
+      </div>
+
+      <section id="kupreychenko-types" class="summary-card summary-card-wide results-appendix">
+        <h3>Типы доверия по Купрейченко</h3>
+        <p class="summary-help">Первый значимый показатель - насколько дифференцировано отношение к человеку, которому респондент доверяет, и человеку, которому не доверяет. На этой основе можно читать профиль доверия не только по общему уровню, но и по смыслу отдельных компонент.</p>
+        <div class="block-links">
+          <a class="text-link" href="#results-top">Вернуться к результатам</a>
+        </div>
+        ${renderDefinitionGrid(kupreychenkoTypeDefinitions)}
+      </section>
+
+      <section id="trsi-meaning" class="summary-card summary-card-wide results-appendix">
+        <h3>Пояснение к ТРСИ</h3>
+        <p class="summary-help">Ниже собраны смысловые группы интегральных показателей. Принятие изменений объединяет освоение изменений, преодоление трудностей, стремление к изменениям и предпочтение неопределенности. Непринятие изменений объединяет избегание изменений, упреждение изменений и сохранение стабильности.</p>
+        <div class="block-links">
+          <a class="text-link" href="#results-top">Вернуться к результатам</a>
+        </div>
+        ${renderDefinitionGrid(trsiGroupDefinitions)}
+        <div class="interpretation-block">
+          <h5>Подробные шкалы</h5>
+          ${renderDefinitionGrid(trsiDetailedDefinitions)}
+        </div>
+      </section>
 
       <div class="notice">
         <div class="passport-grid" style="align-items:start;">
@@ -1057,8 +1208,12 @@ function renderOpm2ChartPanel(scores) {
         axes: primaryAxes,
         min: 1,
         max: 5,
-        note: "Подписи и баллы вынесены прямо на диаграмму, чтобы не читать отдельную расшифровку ниже.",
+        note: "",
       })}
+      <div class="interpretation-block">
+        <h5>Расшифровка шкал</h5>
+        ${renderDefinitionGrid(opm2ScaleDefinitions)}
+      </div>
       ${renderIntegralComparisonCard({
         title: "Интегральные показатели",
         subtitle: "Автономная и контролируемая мотивация на общей линейной шкале",
@@ -1067,7 +1222,7 @@ function renderOpm2ChartPanel(scores) {
         rai: scores.rai,
         min: 1,
         max: 5,
-        note: "Чем длиннее полоса, тем выше показатель. Разница между строками показывает RAI.",
+        note: "Чем длиннее полоса, тем выше показатель. Разница между строками показывает индекс относительной автономии.",
       })}
     </div>
   `;
@@ -1075,13 +1230,13 @@ function renderOpm2ChartPanel(scores) {
 
 function renderTrsiChartPanel(scores) {
   const primaryAxes = [
-    { short: "ОИ", label: "Освоение изменений", value: scores.primary.mastery },
-    { short: "ПТ", label: "Преодоление трудностей", value: scores.primary.overcoming },
-    { short: "СИ", label: "Стремление к изменениям", value: scores.primary.seeking },
-    { short: "ПН", label: "Предпочтение неопределенности", value: scores.primary.preference },
-    { short: "ИЗ", label: "Избегание изменений", value: scores.primary.avoidance },
-    { short: "УП", label: "Упреждение изменений", value: scores.primary.anticipation },
-    { short: "СС", label: "Сохранение стабильности", value: scores.primary.stability },
+    { short: "ОИ", label: "Освоение изменений", detail: trsiFactorDefinitions[0].description, value: scores.primary.mastery },
+    { short: "ПТ", label: "Преодоление трудностей", detail: trsiFactorDefinitions[1].description, value: scores.primary.overcoming },
+    { short: "СИ", label: "Стремление к изменениям", detail: trsiFactorDefinitions[2].description, value: scores.primary.seeking },
+    { short: "ПН", label: "Предпочтение неопределенности", detail: trsiFactorDefinitions[3].description, value: scores.primary.preference },
+    { short: "ИЗ", label: "Избегание изменений", detail: trsiFactorDefinitions[4].description, value: scores.primary.avoidance },
+    { short: "УП", label: "Упреждение изменений", detail: trsiFactorDefinitions[5].description, value: scores.primary.anticipation },
+    { short: "СС", label: "Сохранение стабильности", detail: trsiFactorDefinitions[6].description, value: scores.primary.stability },
   ];
 
   return `
@@ -1127,6 +1282,10 @@ function renderKupreychenkoChartPanel(scores) {
         max: 5,
         note: "Зелёная линия - доверие, оранжевая - недоверие. Подписи на осях показывают оба значения сразу, чтобы дельта читалась без отдельной расшифровки.",
       })}
+      <div class="interpretation-block">
+        <h5>Расшифровка компонентов доверия</h5>
+        ${renderDefinitionGrid(kupreychenkoComponentDefinitions)}
+      </div>
     </div>
   `;
 }
@@ -1143,7 +1302,7 @@ function renderRadarComparisonChartCard({ title, subtitle, axes, min, max, note 
         </div>
       </div>
       ${renderRadarComparisonSvg(axes, min, max)}
-      <p class="chart-note">${escapeHtml(note)}</p>
+      ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
   `;
 }
@@ -1316,9 +1475,12 @@ function renderIntegralComparisonCard({ title, subtitle, autonomous, controlled,
         ${series}
         <line x1="${autonomousX}" y1="${rowY[0]}" x2="${controlledX}" y2="${rowY[1]}" class="comparison-delta-line" style="stroke:${connectorColor};"></line>
         <circle cx="${deltaX}" cy="${deltaY}" r="18" class="comparison-delta-badge" style="fill:${rai >= 0 ? 'rgba(47, 125, 115, 0.14)' : 'rgba(210, 109, 73, 0.14)'}; stroke:${connectorColor};"></circle>
-        <text x="${deltaX}" y="${deltaY + 5}" text-anchor="middle" class="comparison-delta-text">${escapeHtml(`RAI ${formatSignedScore(rai)}`)}</text>
+        <text x="${deltaX}" y="${deltaY - 3}" text-anchor="middle" class="comparison-delta-text">
+          <tspan x="${deltaX}" dy="0">Индекс</tspan>
+          <tspan x="${deltaX}" dy="14">${escapeHtml(formatSignedScore(rai))}</tspan>
+        </text>
       </svg>
-      <p class="chart-note">${escapeHtml(note)}</p>
+      ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
   `;
 }
@@ -1398,7 +1560,7 @@ function renderRadarChartCard({ title, subtitle, axes, min, max, note }) {
         <p class="chart-subtitle">${escapeHtml(subtitle)}</p>
       </div>
       ${renderRadarSvg(axes, chartValues, displayValues, min, max)}
-      <p class="chart-note">${escapeHtml(note)}</p>
+      ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
   `;
 }
@@ -1447,14 +1609,16 @@ function renderRadarSvg(axes, chartValues, displayValues, min, max) {
   const labels = axes.map((axis, index) => {
     const [x, y] = point(angles[index], radius + 48);
     const dx = x < cx - 40 ? -10 : x > cx + 40 ? 10 : 0;
-    const dy = y < cy - 40 ? -4 : y > cy + 40 ? 12 : 0;
+    const dy = y < cy - 40 ? -6 : y > cy + 40 ? 12 : 0;
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
+    const hasDetail = Boolean(axis.detail);
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        <tspan x="${labelX}" dy="18" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
+        ${hasDetail ? `<tspan x="${labelX}" dy="13" class="radar-label-detail">${escapeHtml(axis.detail)}</tspan>` : ""}
+        <tspan x="${labelX}" dy="${hasDetail ? "15" : "18"}" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
       </text>
     `;
   }).join("");

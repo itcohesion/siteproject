@@ -1,1 +1,40 @@
+name: Export questionnaire responses
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Export from API
+        run: node scripts/export-responses.js
+        env:
+          QUESTIONNAIRE_RESULTS_EXPORT_URL: ${{ secrets.QUESTIONNAIRE_RESULTS_EXPORT_URL }}
+          QUESTIONNAIRE_RESULTS_EXPORT_TOKEN: ${{ secrets.QUESTIONNAIRE_RESULTS_EXPORT_TOKEN }}
+
+      - name: Commit exported files
+        run: |
+          if git diff --quiet -- responses; then
+            echo "No exported response changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add responses
+          git commit -m "chore: export questionnaire responses"
+          git push

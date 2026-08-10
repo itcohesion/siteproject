@@ -1,9 +1,16 @@
-const surveyData = globalThis.surveyData;
+﻿const surveyData = globalThis.surveyData;
 
 const STORAGE_KEY = "questionnaire-suite-v2";
 const DRAFT_FILE_KIND = "questionnaire-suite-draft";
 const DRAFT_FILE_VERSION = 2;
 const APP_TITLE = "Готовность к совместной работе: диагностика для участников ИТ-проектов";
+
+const RESPONSE_API_URL = String(globalThis.QUESTIONNAIRE_RESULTS_API_URL || "").trim();
+const GITHUB_OWNER = String(globalThis.QUESTIONNAIRE_GITHUB_OWNER || "").trim();
+const GITHUB_REPO = String(globalThis.QUESTIONNAIRE_GITHUB_REPO || "").trim();
+const GITHUB_BRANCH = String(globalThis.QUESTIONNAIRE_GITHUB_BRANCH || "main").trim() || "main";
+const GITHUB_TOKEN = String(globalThis.QUESTIONNAIRE_GITHUB_TOKEN || "").trim();
+const GITHUB_PATH_PREFIX = String(globalThis.QUESTIONNAIRE_GITHUB_PATH_PREFIX || "responses").trim().replace(/^\/+|\/+$/g, "") || "responses";
 
 document.title = APP_TITLE;
 
@@ -77,6 +84,9 @@ function createInitialState() {
       lastSavedAt: null,
       completedAt: null,
       lastImportedAt: null,
+      submittedAt: null,
+      submissionMode: null,
+      submissionId: null,
     },
   };
 }
@@ -116,6 +126,9 @@ function createDemoReviewState() {
       lastSavedAt: new Date().toISOString(),
       completedAt: null,
       lastImportedAt: null,
+      submittedAt: null,
+      submissionMode: "demo",
+      submissionId: "demo-review",
     },
   };
 }
@@ -1175,13 +1188,10 @@ function renderReview() {
       </div>
 
       <div class="page-footer">
-        <p class="helper-text">Если EmailJS не настроен, результат можно скачать локально в JSON-файле.</p>
         <div class="footer-row">
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
           <div class="footer-row">
             <button class="btn ghost" type="button" data-action="save-draft">Сохранить черновик</button>
-            <button class="btn ghost" type="button" data-action="download-json">Скачать JSON</button>
-            <button class="btn ghost" type="button" data-action="copy-json">Скопировать JSON</button>
             <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Отправить →</button>
           </div>
         </div>
@@ -1668,13 +1678,17 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 }
 
 function renderDone() {
+  const submissionLabel = state.meta.submissionMode === "github"
+    ? "Сохранено на GitHub."
+    : state.meta.submissionMode === "server"
+      ? "Сохранено в хранилище и готово к экспорту в GitHub."
+      : "Файл результатов был скачан локально.";
   return `
     <article class="done-card">
       <h2 class="section-title">Готово</h2>
-      <p class="section-copy">Анкета завершена. Черновик остаётся доступным в браузере, а итоговый файл можно скачать или скопировать при необходимости.</p>
+      <p class="section-copy">Анкета завершена. Благодарим за участие в опросе!</p>
+      <p class="summary-help">${submissionLabel}</p>
       <div class="footer-row">
-        <button class="btn secondary" type="button" data-action="download-json">Скачать JSON</button>
-        <button class="btn ghost" type="button" data-action="copy-json">Скопировать JSON</button>
         <button class="btn primary" type="button" data-action="restart">Пройти еще раз</button>
       </div>
     </article>
@@ -2102,6 +2116,7 @@ function buildPayload() {
       followup: {
         want_detailed_report: Boolean(state.followup.wantDetailedReport),
         email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
+        detailed_report_email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
       },
     },
     cooperation: {
@@ -2226,6 +2241,113 @@ async function copyPayloadToClipboard() {
   }
 }
 
+async function savePayloadToServer(payload) {
+  if (!RESPONSE_API_URL) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(RESPONSE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const text = await response.text();
+    if (!text.trim()) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { raw: text };
+    }
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function encodeUtf8Base64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function buildGitHubResponsePath(payload) {
+  const iso = String(payload?.submittedAt || new Date().toISOString())
+    .replaceAll(":", "-")
+    .replaceAll(".", "-");
+  const id = String(payload?.submissionId || crypto.randomUUID()).replaceAll("/", "-");
+  const prefix = GITHUB_PATH_PREFIX ? `${GITHUB_PATH_PREFIX}/` : "";
+  return `${prefix}${new Date().toISOString().slice(0, 10)}/${iso}-${id}.json`;
+}
+
+async function savePayloadToGitHub(payload) {
+  if (!GITHUB_OWNER || !GITHUB_REPO || !GITHUB_TOKEN) {
+    return null;
+  }
+
+  const path = buildGitHubResponsePath(payload);
+  const url = `https://api.github.com/repos/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/contents/${path.split("/").map((part) => encodeURIComponent(part)).join("/")}`;
+  const body = {
+    message: `Add questionnaire response ${payload?.submissionId || ""}`.trim(),
+    content: encodeUtf8Base64(JSON.stringify(payload, null, 2)),
+    branch: GITHUB_BRANCH,
+    committer: {
+      name: "Questionnaire Bot",
+      email: "questionnaire-bot@users.noreply.github.com",
+    },
+  };
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  let data = null;
+  if (text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+  }
+
+  if (!response.ok) {
+    const message = data?.message || `GitHub returned ${response.status}`;
+    throw new Error(message);
+  }
+
+  return {
+    path,
+    sha: data?.content?.sha || data?.commit?.sha || null,
+    url: data?.content?.html_url || data?.content?.git_url || null,
+    commitSha: data?.commit?.sha || null,
+  };
+}
+
 async function submitResults() {
   if (!isReviewComplete()) {
     render();
@@ -2233,39 +2355,36 @@ async function submitResults() {
   }
 
   const payload = buildPayload();
-  const emailjs = window.emailjs;
-  const config = {
-    serviceId: "YOUR_SERVICE_ID",
-    templateId: "YOUR_TEMPLATE_ID",
-    publicKey: "YOUR_PUBLIC_KEY",
-  };
 
-  if (
-    state.followup.wantDetailedReport
-    && state.followup.email.trim()
-    && emailjs
-    && config.serviceId !== "YOUR_SERVICE_ID"
-    && config.templateId !== "YOUR_TEMPLATE_ID"
-    && config.publicKey !== "YOUR_PUBLIC_KEY"
-  ) {
+  let savedDestination = null;
+  let submittedRecord = null;
+  try {
+    submittedRecord = await savePayloadToGitHub(payload);
+    if (submittedRecord) {
+      savedDestination = "github";
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  if (!savedDestination) {
     try {
-      await emailjs.send(
-        config.serviceId,
-        config.templateId,
-        {
-          to_email: state.followup.email.trim(),
-          subject: "Результаты анкеты",
-          message: JSON.stringify(payload, null, 2),
-        },
-        { publicKey: config.publicKey }
-      );
+      submittedRecord = await savePayloadToServer(payload);
+      if (RESPONSE_API_URL) {
+        savedDestination = "server";
+      }
     } catch (error) {
       console.error(error);
-      downloadPayload();
     }
-  } else {
+  }
+
+  if (!savedDestination) {
     downloadPayload();
   }
+
+  state.meta.submittedAt = new Date().toISOString();
+  state.meta.submissionMode = savedDestination || "download";
+  state.meta.submissionId = submittedRecord?.id || submittedRecord?.submissionId || submittedRecord?.commitSha || state.meta.submissionId;
 
   state.stage = "done";
   state.meta.completedAt = new Date().toISOString();
@@ -2277,3 +2396,4 @@ async function submitResults() {
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+

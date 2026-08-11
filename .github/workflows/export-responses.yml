@@ -1,40 +1,66 @@
-name: Export questionnaire responses
+name: Store questionnaire responses
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: "*/15 * * * *"
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
-  export:
+  store-response:
     runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'questionnaire-response') || startsWith(github.event.issue.title, '[questionnaire-response]')
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Parse issue body and store JSON
+        uses: actions/github-script@v7
         with:
-          node-version: "24"
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const match = body.match(/```json\s*([\s\S]*?)\s*```/i);
 
-      - name: Export from API
-        run: node scripts/export-responses.js
-        env:
-          QUESTIONNAIRE_RESULTS_EXPORT_URL: ${{ secrets.QUESTIONNAIRE_RESULTS_EXPORT_URL }}
-          QUESTIONNAIRE_RESULTS_EXPORT_TOKEN: ${{ secrets.QUESTIONNAIRE_RESULTS_EXPORT_TOKEN }}
+            if (!match) {
+              core.setFailed('JSON block not found in issue body.');
+              return;
+            }
 
-      - name: Commit exported files
-        run: |
-          if git diff --quiet -- responses; then
-            echo "No exported response changes."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add responses
-          git commit -m "chore: export questionnaire responses"
-          git push
+            let payload;
+            try {
+              payload = JSON.parse(match[1]);
+            } catch (error) {
+              core.setFailed(`Unable to parse JSON payload: ${error.message}`);
+              return;
+            }
+
+            const submittedAt = payload?.meta?.timestamp || new Date().toISOString();
+            const datePart = submittedAt.slice(0, 10);
+            const safeStamp = submittedAt.replaceAll(':', '-').replaceAll('.', '-');
+            const fileName = `${safeStamp}-issue-${issue.number}.json`;
+            const path = `responses/${datePart}/${fileName}`;
+            const content = Buffer.from(JSON.stringify(payload, null, 2), 'utf8').toString('base64');
+
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path,
+              message: `Add questionnaire response from issue #${issue.number}`,
+              content,
+              branch: context.payload.repository.default_branch,
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `Response saved to \`${path}\`.`,
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'closed',
+            });

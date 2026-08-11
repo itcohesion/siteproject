@@ -879,7 +879,7 @@ function renderIntroView() {
 
 function renderPassportView() {
   return `
-    <article class="main-card" id="results-top">
+    <article class="main-card">
       <div class="section-head">
         <h2 class="section-title">Профиль участника</h2>
         <p class="section-copy">Заполните короткие сведения о себе, чтобы результаты можно было связать с контекстом работы.</p>
@@ -1193,7 +1193,7 @@ function renderReview() {
   const cooperationLevel = getCooperationLevel(cooperationScore);
 
   return `
-    <article class="main-card">
+    <article class="main-card" id="results-top">
       <div class="section-head">
         <h2 class="section-title">Результаты перед завершением</h2>
         <p class="section-copy">Проверьте краткую сводку и при желании оставьте почту для подробной расшифровки результатов.</p>
@@ -1251,11 +1251,6 @@ function renderReview() {
           </ul>
           ${renderOpm2ChartPanel(payload.opm2.scores)}
         </section>
-      </div>
-
-      <div class="result-links">
-        <a class="text-link" href="#kupreychenko-types">Типы доверия по Купрейченко</a>
-        <a class="text-link" href="#trsi-meaning">Пояснение к ТРСИ</a>
       </div>
 
       <section id="kupreychenko-types" class="summary-card summary-card-wide results-appendix">

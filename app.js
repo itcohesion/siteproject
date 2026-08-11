@@ -448,10 +448,7 @@ function isPassportComplete() {
 }
 
 function isFollowupComplete() {
-  if (!state.followup.wantDetailedReport) {
-    return true;
-  }
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(state.followup.email).trim());
+  return true;
 }
 
 function isCurrentPageComplete(methodKey) {
@@ -1189,7 +1186,6 @@ function renderDefinitionGrid(items) {
 
 function renderReview() {
   const payload = buildPayload();
-  const followupChecked = state.followup.wantDetailedReport ? "checked" : "";
   const cooperationScore = calculateCooperationScore();
   const cooperationLevel = getCooperationLevel(cooperationScore);
 
@@ -1283,25 +1279,17 @@ function renderReview() {
 
       <div class="notice">
         <div class="passport-grid" style="align-items:start;">
-          <div class="passport-field wide">
-            <label class="check-card">
-              <input type="checkbox" name="wantDetailedReport" ${followupChecked} />
-              <span>Хочу получить детальную расшифровку результатов на почту</span>
-            </label>
-          </div>
-          ${state.followup.wantDetailedReport ? `
-            <label class="passport-field wide">
-              <span class="field-label">Почта для расшифровки *</span>
-              <input
-                class="field-control"
-                type="email"
-                name="email"
-                value="${escapeHtml(state.followup.email)}"
-                placeholder="name@example.com"
-              />
-            </label>
-          ` : ""}
-          <p class="helper-text wide">Если галочка включена, итоговый JSON уйдёт письмом через EmailJS на указанный адрес.</p>
+          <label class="passport-field wide">
+            <span class="field-label">Почта для связи</span>
+            <input
+              class="field-control"
+              type="email"
+              name="email"
+              value="${escapeHtml(state.followup.email)}"
+              placeholder="name@example.com"
+            />
+          </label>
+          <p class="helper-text wide">Можете указать свою почту, если хотите получить детальный анализ по опроснику.</p>
         </div>
       </div>
 
@@ -1310,7 +1298,7 @@ function renderReview() {
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
           <div class="footer-row">
             <button class="btn ghost" type="button" data-action="save-draft">Сохранить черновик</button>
-            <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Отправить результаты и завершить</button>
+            <button class="btn primary" type="button" data-action="submit-results">Отправить результаты и завершить</button>
           </div>
         </div>
       </div>
@@ -1797,7 +1785,7 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 
 function renderDone() {
   const submissionLabel = state.meta.submissionMode === "email"
-    ? `Письмо с JSON-вложением отправлено на ${escapeHtml(state.followup.email || "указанную почту")}.`
+    ? "Письмо с результатами отправлено."
     : "Анкета завершена. Благодарим за участие в опросе!";
   return `
     <article class="done-card">
@@ -2228,11 +2216,12 @@ function buildPayload() {
         role_in_project: state.passport.roleInProject,
         influence_on_project: Boolean(state.passport.influenceOnProject),
         has_subordinates: Boolean(state.passport.hasSubordinates),
+        email: state.followup.email.trim(),
       },
       followup: {
         want_detailed_report: Boolean(state.followup.wantDetailedReport),
-        email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
-        detailed_report_email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
+        email: state.followup.email.trim(),
+        detailed_report_email: state.followup.email.trim(),
       },
     },
     cooperation: {
@@ -2304,11 +2293,12 @@ function buildSubmissionPayload() {
       roleInProject: state.passport.roleInProject,
       influenceOnProject: Boolean(state.passport.influenceOnProject),
       hasSubordinates: Boolean(state.passport.hasSubordinates),
+      email: state.followup.email.trim(),
     },
     followup: {
       wantDetailedReport: Boolean(state.followup.wantDetailedReport),
-      email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
-      detailedReportEmail: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
+      email: state.followup.email.trim(),
+      detailedReportEmail: state.followup.email.trim(),
     },
     answers: {
       cooperation: state.answers.cooperation,
@@ -2400,16 +2390,10 @@ function buildEmailTextPayload(payload) {
   ].join("\n");
 
   return {
-    to_email: recipientEmail,
-    reply_to: recipientEmail,
-    recipient_email: recipientEmail,
-    subject: `Результаты опроса ${APP_TITLE}`,
-    title: APP_TITLE,
-    submitted_at: new Date(timestamp).toLocaleString("ru-RU"),
-    summary,
-    summary_html: escapeHtml(summary).replace(/\n/g, "<br />"),
-    json_text: jsonText,
-    json_text_html: escapeHtml(jsonText),
+    name: "Результаты опроса",
+    time: new Date(timestamp).toLocaleString("ru-RU"),
+    email: recipientEmail,
+    message: `${summary}\n\nJSON:\n${jsonText}`,
   };
 }
 
@@ -2441,15 +2425,32 @@ async function sendResultsByEmail(payload) {
 
 async function submitResults() {
   if (!isReviewComplete()) {
+    const missing = [];
+    if (!isPassportComplete()) {
+      missing.push("профиль участника");
+    }
+    if (!isMethodComplete("cooperation")) {
+      missing.push("сотрудничество");
+    }
+    if (!isMethodComplete("kupreychenko")) {
+      missing.push("доверие");
+    }
+    if (!isMethodComplete("trsi")) {
+      missing.push("ТРСИ");
+    }
+    if (!isMethodComplete("opm2")) {
+      missing.push("ОПМ-2");
+    }
+    alert(missing.length
+      ? `Не хватает ответов или данных: ${missing.join(", ")}.`
+      : "Проверьте форму и попробуйте отправить ещё раз.");
     render();
     return;
   }
 
   const payload = buildPayload();
   try {
-    if (state.followup.wantDetailedReport) {
-      await sendResultsByEmail(payload);
-    }
+    await sendResultsByEmail(payload);
   } catch (error) {
     console.error(error);
     alert(error instanceof Error ? error.message : "Не удалось отправить письмо через EmailJS.");
@@ -2457,7 +2458,7 @@ async function submitResults() {
   }
 
   state.meta.submittedAt = new Date().toISOString();
-  state.meta.submissionMode = state.followup.wantDetailedReport ? "email" : "finished";
+  state.meta.submissionMode = "email";
   state.meta.submissionId = crypto.randomUUID();
 
   state.stage = "done";

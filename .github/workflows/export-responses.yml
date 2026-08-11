@@ -18,18 +18,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const zlib = require('node:zlib');
             const issue = context.payload.issue;
             const body = issue.body || '';
-            const match = body.match(/```json\s*([\s\S]*?)\s*```/i);
+            const match = body.match(/^qr1:([A-Za-z0-9_-]+)\s*$/s);
 
             if (!match) {
-              core.setFailed('JSON block not found in issue body.');
+              core.setFailed('Compressed payload not found in issue body.');
               return;
             }
 
             let payload;
             try {
-              payload = JSON.parse(match[1]);
+              const compressed = Buffer.from(match[1], 'base64url');
+              const json = zlib.gunzipSync(compressed).toString('utf8');
+              payload = JSON.parse(json);
             } catch (error) {
               core.setFailed(`Unable to parse JSON payload: ${error.message}`);
               return;

@@ -1,5 +1,3 @@
-window.QUESTIONNAIRE_RESULTS_API_URL = "";
-window.QUESTIONNAIRE_GITHUB_OWNER = "itcohesion";
-window.QUESTIONNAIRE_GITHUB_REPO = "answers";
-window.QUESTIONNAIRE_GITHUB_ISSUE_LABEL = "questionnaire-response";
-window.QUESTIONNAIRE_GITHUB_ISSUE_URL = "";
+window.QUESTIONNAIRE_EMAILJS_PUBLIC_KEY = "ktuK_5ufiEOQMbe4y";
+window.QUESTIONNAIRE_EMAILJS_SERVICE_ID = "service_8wqy1gg";
+window.QUESTIONNAIRE_EMAILJS_TEMPLATE_ID = "template_gdqzilu";

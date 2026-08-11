@@ -5,7 +5,10 @@ const DRAFT_FILE_KIND = "questionnaire-suite-draft";
 const DRAFT_FILE_VERSION = 2;
 const APP_TITLE = "Готовность к совместной работе: диагностика для участников ИТ-проектов";
 
-const RESPONSE_API_URL = String(globalThis.QUESTIONNAIRE_RESULTS_API_URL || "").trim();
+const EMAILJS_PUBLIC_KEY = String(globalThis.QUESTIONNAIRE_EMAILJS_PUBLIC_KEY || "").trim();
+const EMAILJS_SERVICE_ID = String(globalThis.QUESTIONNAIRE_EMAILJS_SERVICE_ID || "").trim();
+const EMAILJS_TEMPLATE_ID = String(globalThis.QUESTIONNAIRE_EMAILJS_TEMPLATE_ID || "").trim();
+const EMAILJS_API_URL = "https://api.emailjs.com/api/v1.0/email/send";
 
 document.title = APP_TITLE;
 
@@ -378,6 +381,10 @@ function roundScore(value, digits = 2) {
     return "—";
   }
   return value.toFixed(digits);
+}
+
+function formatScorePair(first, second) {
+  return `${roundScore(first)} / ${roundScore(second)}`;
 }
 
 function formatSignedScore(value, digits = 2) {
@@ -1294,6 +1301,7 @@ function renderReview() {
               />
             </label>
           ` : ""}
+          <p class="helper-text wide">Если галочка включена, итоговый JSON уйдёт письмом через EmailJS на указанный адрес.</p>
         </div>
       </div>
 
@@ -1302,7 +1310,7 @@ function renderReview() {
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
           <div class="footer-row">
             <button class="btn ghost" type="button" data-action="save-draft">Сохранить черновик</button>
-            <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Скачать JSON и завершить</button>
+            <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Отправить результаты и завершить</button>
           </div>
         </div>
       </div>
@@ -1788,9 +1796,9 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 }
 
 function renderDone() {
-  const submissionLabel = state.meta.submissionMode === "download"
-    ? "Файл JSON скачан. При необходимости загрузите его в репозиторий answers через Upload files."
-    : "Файл результатов был скачан локально.";
+  const submissionLabel = state.meta.submissionMode === "email"
+    ? `Письмо с JSON-вложением отправлено на ${escapeHtml(state.followup.email || "указанную почту")}.`
+    : "Анкета завершена. Благодарим за участие в опросе!";
   return `
     <article class="done-card">
       <h2 class="section-title">Готово</h2>
@@ -2376,41 +2384,59 @@ async function copyPayloadToClipboard() {
   }
 }
 
-async function savePayloadToServer(payload) {
-  if (!RESPONSE_API_URL) {
-    return null;
+function buildEmailTextPayload(payload) {
+  const timestamp = typeof payload?.meta?.timestamp === "string" ? payload.meta.timestamp : new Date().toISOString();
+  const jsonText = JSON.stringify(payload, null, 2);
+  const recipientEmail = String(state.followup.email || "").trim();
+  const summary = [
+    "Спасибо за участие в опросе.",
+    "",
+    `Профиль: ${state.passport.position || "—"}`,
+    `Роль: ${formatProjectRole(state.passport.roleInProject) || "—"}`,
+    `Степень готовности к сотрудничеству: ${calculateCooperationScore()} / 25`,
+    `Доверие / недоверие: ${formatScorePair(payload.derived.kupreychenko.trust.overall, payload.derived.kupreychenko.distrust.overall)}`,
+    `ТРСИ: ${formatScorePair(payload.derived.trsi.acceptance, payload.derived.trsi.rejection)}`,
+    `ОПМ-2: автономная ${roundScore(payload.derived.opm2.autonomous)}, контролируемая ${roundScore(payload.derived.opm2.controlled)}`,
+  ].join("\n");
+
+  return {
+    to_email: recipientEmail,
+    reply_to: recipientEmail,
+    recipient_email: recipientEmail,
+    subject: `Результаты опроса ${APP_TITLE}`,
+    title: APP_TITLE,
+    submitted_at: new Date(timestamp).toLocaleString("ru-RU"),
+    summary,
+    summary_html: escapeHtml(summary).replace(/\n/g, "<br />"),
+    json_text: jsonText,
+    json_text_html: escapeHtml(jsonText),
+  };
+}
+
+async function sendResultsByEmail(payload) {
+  if (!EMAILJS_PUBLIC_KEY || !EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID) {
+    throw new Error("EmailJS не настроен: проверь service id, template id и public key в config.js");
   }
 
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(RESPONSE_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-      mode: "cors",
-    });
+  const response = await fetch(EMAILJS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      template_params: buildEmailTextPayload(payload),
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
-    }
-
-    const text = await response.text();
-    if (!text.trim()) {
-      return {};
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { raw: text };
-    }
-  } finally {
-    window.clearTimeout(timeout);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `EmailJS вернул статус ${response.status}`);
   }
+
+  return text;
 }
 
 async function submitResults() {
@@ -2419,10 +2445,19 @@ async function submitResults() {
     return;
   }
 
-  downloadPayload();
+  const payload = buildPayload();
+  try {
+    if (state.followup.wantDetailedReport) {
+      await sendResultsByEmail(payload);
+    }
+  } catch (error) {
+    console.error(error);
+    alert(error instanceof Error ? error.message : "Не удалось отправить письмо через EmailJS.");
+    return;
+  }
 
   state.meta.submittedAt = new Date().toISOString();
-  state.meta.submissionMode = "download";
+  state.meta.submissionMode = state.followup.wantDetailedReport ? "email" : "finished";
   state.meta.submissionId = crypto.randomUUID();
 
   state.stage = "done";

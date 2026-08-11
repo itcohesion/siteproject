@@ -2275,7 +2275,24 @@ async function savePayloadToServer(payload) {
   }
 }
 
-function buildGitHubIssueUrl(payload) {
+async function compressJsonToBase64Url(payload) {
+  const json = JSON.stringify(payload);
+  if (typeof CompressionStream === "undefined") {
+    throw new Error("CompressionStream is not supported in this browser.");
+  }
+
+  const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"));
+  const compressedBuffer = await new Response(stream).arrayBuffer();
+  const bytes = new Uint8Array(compressedBuffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function buildGitHubIssueUrl(payload) {
   const baseUrl = GITHUB_ISSUE_URL || (GITHUB_OWNER && GITHUB_REPO
     ? `https://github.com/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/issues/new`
     : "");
@@ -2284,17 +2301,9 @@ function buildGitHubIssueUrl(payload) {
   }
 
   const submittedAt = String(payload?.meta?.timestamp || new Date().toISOString());
-  const title = `[questionnaire-response] Ответ анкеты ${submittedAt.slice(0, 10)}`;
-  const body = [
-    "### JSON ответа",
-    "",
-    "```json",
-    JSON.stringify(payload, null, 2),
-    "```",
-    "",
-    `- source: questionnaire`,
-    `- submitted_at: ${submittedAt}`,
-  ].join("\n");
+  const title = `[questionnaire-response] ${submittedAt.slice(0, 10)}`;
+  const encodedPayload = await compressJsonToBase64Url(payload);
+  const body = `qr1:${encodedPayload}`;
 
   const params = new URLSearchParams({
     title,
@@ -2314,7 +2323,7 @@ async function submitResults() {
   }
 
   const payload = buildPayload();
-  const issueUrl = buildGitHubIssueUrl(payload);
+  const issueUrl = await buildGitHubIssueUrl(payload);
   if (!issueUrl) {
     downloadPayload();
     state.meta.submittedAt = new Date().toISOString();

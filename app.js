@@ -413,7 +413,10 @@ function getMethodAnsweredCount(methodKey) {
     return countFilled(state.answers.cooperation);
   }
   if (methodKey === "kupreychenko") {
-    return state.answers.kupreychenko.reduce((sum, entry) => sum + countFilled([entry.trust, entry.distrust]), 0);
+    return state.answers.kupreychenko.reduce(
+      (sum, entry) => sum + (Number.isInteger(entry.trust) && Number.isInteger(entry.distrust) ? 1 : 0),
+      0,
+    );
   }
   if (methodKey === "trsi") {
     return countFilled(state.answers.trsi);
@@ -1469,11 +1472,14 @@ function renderRadarComparisonSvg(axes, min, max) {
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
+    const delta = axis.trust - axis.distrust;
+    const deltaClass = delta >= 0 ? "radar-label-score-delta radar-label-score-delta-positive" : "radar-label-score-delta radar-label-score-delta-negative";
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        <tspan x="${labelX}" dy="18" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>
-        <tspan x="${labelX}" dy="15" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>
+        <tspan x="${labelX}" dy="17" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>
+        <tspan x="${labelX}" dy="13" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>
+        <tspan x="${labelX}" dy="13" class="radar-label-score ${deltaClass}">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>
       </text>
     `;
   }).join("");
@@ -1815,7 +1821,7 @@ function renderSidebar() {
       <h3 class="side-title">Сводка</h3>
       <ul class="details-list">
         <li><span>Степень готовности к сотрудничеству</span><strong>${getMethodAnsweredCount("cooperation")}/${surveyData.methodologies.cooperation.questions.length}</strong></li>
-        <li><span>Доверие</span><strong>${getMethodAnsweredCount("kupreychenko")}/${surveyData.methodologies.kupreychenko.questions.length * 2}</strong></li>
+        <li><span>Доверие</span><strong>${getMethodAnsweredCount("kupreychenko")}/${surveyData.methodologies.kupreychenko.questions.length}</strong></li>
         <li><span>ТРСИ</span><strong>${getMethodAnsweredCount("trsi")}/${surveyData.methodologies.trsi.questions.length}</strong></li>
         <li><span>ОПМ-2</span><strong>${getMethodAnsweredCount("opm2")}/${surveyData.methodologies.opm2.questions.length}</strong></li>
       </ul>

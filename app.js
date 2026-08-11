@@ -6,10 +6,6 @@ const DRAFT_FILE_VERSION = 2;
 const APP_TITLE = "Готовность к совместной работе: диагностика для участников ИТ-проектов";
 
 const RESPONSE_API_URL = String(globalThis.QUESTIONNAIRE_RESULTS_API_URL || "").trim();
-const GITHUB_OWNER = String(globalThis.QUESTIONNAIRE_GITHUB_OWNER || "").trim();
-const GITHUB_REPO = String(globalThis.QUESTIONNAIRE_GITHUB_REPO || "").trim();
-const GITHUB_ISSUE_LABEL = String(globalThis.QUESTIONNAIRE_GITHUB_ISSUE_LABEL || "questionnaire-response").trim() || "questionnaire-response";
-const GITHUB_ISSUE_URL = String(globalThis.QUESTIONNAIRE_GITHUB_ISSUE_URL || "").trim();
 
 document.title = APP_TITLE;
 
@@ -133,13 +129,14 @@ function createDemoReviewState() {
 }
 
 function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return createInitialState();
-  }
-
   try {
-    return normalizeLoadedState(JSON.parse(raw));
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return createInitialState();
+    }
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, "").trim());
+    const imported = coerceImportedDraft(parsed);
+    return normalizeLoadedState(imported || parsed);
   } catch {
     return createInitialState();
   }
@@ -209,9 +206,123 @@ function normalizeLoadedState(raw) {
   };
 }
 
+function convertResultPayloadToDraftState(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const respondent = raw?.meta?.respondent || {};
+  const followup = raw?.meta?.followup || {};
+  const cooperationAnswers = Array.isArray(raw?.cooperation?.answers) ? raw.cooperation.answers : null;
+  const kupreychenkoQuestions = Array.isArray(raw?.kupreychenko?.questions) ? raw.kupreychenko.questions : null;
+  const trsiQuestions = Array.isArray(raw?.trsi?.questions) ? raw.trsi.questions : null;
+  const opm2Questions = Array.isArray(raw?.opm2?.questions) ? raw.opm2.questions : null;
+
+  if (!cooperationAnswers || !kupreychenkoQuestions || !trsiQuestions || !opm2Questions) {
+    return null;
+  }
+
+  const fresh = createInitialState();
+  return {
+    kind: DRAFT_FILE_KIND,
+    version: DRAFT_FILE_VERSION,
+    savedAt: typeof raw?.meta?.timestamp === "string" ? raw.meta.timestamp : new Date().toISOString(),
+    state: {
+      ...fresh,
+      stage: "done",
+      passport: {
+        ...fresh.passport,
+        position: typeof respondent.position === "string" ? respondent.position : "",
+        gender: typeof respondent.gender === "string" ? respondent.gender : "",
+        age: respondent.age === null || respondent.age === undefined ? "" : String(respondent.age),
+        totalExperienceYears:
+          respondent.total_experience_years === null || respondent.total_experience_years === undefined
+            ? ""
+            : String(respondent.total_experience_years),
+        roleInProject: typeof respondent.role_in_project === "string" ? respondent.role_in_project : "",
+        influenceOnProject: Boolean(respondent.influence_on_project),
+        hasSubordinates: Boolean(respondent.has_subordinates),
+      },
+      followup: {
+        ...fresh.followup,
+        wantDetailedReport: Boolean(followup.want_detailed_report ?? followup.wantDetailedReport),
+        email: typeof followup.detailed_report_email === "string"
+          ? followup.detailed_report_email
+          : typeof followup.email === "string"
+            ? followup.email
+            : "",
+      },
+      answers: {
+        cooperation: fresh.answers.cooperation.map((_, index) => {
+          const value = cooperationAnswers[index];
+          return value === "yes" || value === "no" ? value : null;
+        }),
+        kupreychenko: fresh.answers.kupreychenko.map((entry, index) => {
+          const item = kupreychenkoQuestions[index] || {};
+          return {
+            trust: isValidScaleValue(item.trust, 1, 5) ? Number(item.trust) : entry.trust,
+            distrust: isValidScaleValue(item.distrust, 1, 5) ? Number(item.distrust) : entry.distrust,
+          };
+        }),
+        trsi: fresh.answers.trsi.map((_, index) => {
+          const item = trsiQuestions[index];
+          const value = item?.answer;
+          return isValidScaleValue(value, 1, 4) ? Number(value) : null;
+        }),
+        opm2: fresh.answers.opm2.map((_, index) => {
+          const item = opm2Questions[index];
+          const value = item?.answer;
+          return isValidScaleValue(value, 1, 5) ? Number(value) : null;
+        }),
+      },
+      meta: {
+        ...fresh.meta,
+        lastSavedAt: typeof raw?.meta?.timestamp === "string" ? raw.meta.timestamp : null,
+        completedAt: typeof raw?.meta?.completedAt === "string" ? raw.meta.completedAt : null,
+        lastImportedAt: null,
+        submittedAt: typeof raw?.meta?.timestamp === "string" ? raw.meta.timestamp : null,
+        submissionMode: "imported",
+      },
+    },
+  };
+}
+
+function coerceImportedDraft(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  if (raw.kind === DRAFT_FILE_KIND && raw.state) {
+    return raw;
+  }
+
+  if (raw.passport && raw.answers) {
+    return {
+      kind: DRAFT_FILE_KIND,
+      version: typeof raw.version === "number" ? raw.version : DRAFT_FILE_VERSION,
+      savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
+      state: raw,
+    };
+  }
+
+  return convertResultPayloadToDraftState(raw);
+}
+
 function saveState() {
   state.meta.lastSavedAt = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage errors on restricted file:// contexts.
+  }
+}
+
+function removeState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage errors on restricted file:// contexts.
+  }
 }
 
 function createDraftSnapshot() {
@@ -438,7 +549,7 @@ function canJumpToStage(nextStage) {
       && isMethodComplete("cooperation")
       && isMethodComplete("kupreychenko")
       && isMethodComplete("trsi")
-      && isMethodComplete("opm2");
+      && (isMethodComplete("opm2") || state.stage === "opm2");
   }
 
   if (nextStage === "done") {
@@ -1070,7 +1181,7 @@ function renderDefinitionGrid(items) {
 }
 
 function renderReview() {
-  const payload = buildSubmissionPayload();
+  const payload = buildPayload();
   const followupChecked = state.followup.wantDetailedReport ? "checked" : "";
   const cooperationScore = calculateCooperationScore();
   const cooperationLevel = getCooperationLevel(cooperationScore);
@@ -1191,7 +1302,7 @@ function renderReview() {
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
           <div class="footer-row">
             <button class="btn ghost" type="button" data-action="save-draft">Сохранить черновик</button>
-            <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Отправить →</button>
+            <button class="btn primary" type="button" data-action="submit-results" ${isReviewComplete() ? "" : "disabled"}>Скачать JSON и завершить</button>
           </div>
         </div>
       </div>
@@ -1677,8 +1788,8 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 }
 
 function renderDone() {
-  const submissionLabel = state.meta.submissionMode === "github-issue"
-    ? "Откроется GitHub issue. После нажатия Submit new issue ответ сохранится в репозитории."
+  const submissionLabel = state.meta.submissionMode === "download"
+    ? "Файл JSON скачан. При необходимости загрузите его в репозиторий answers через Upload files."
     : "Файл результатов был скачан локально.";
   return `
     <article class="done-card">
@@ -1844,7 +1955,7 @@ function handleClick(event) {
 
   if (action === "restart") {
     if (confirm("Начать новый проход и удалить текущий черновик?")) {
-      localStorage.removeItem(STORAGE_KEY);
+      removeState();
       Object.assign(state, createInitialState());
       saveState();
       render();
@@ -2230,14 +2341,14 @@ function downloadDraft() {
 async function importDraftFile(file) {
   try {
     const text = await file.text();
-    const parsed = JSON.parse(text);
-    const source = parsed?.kind === DRAFT_FILE_KIND && parsed?.state ? parsed.state : parsed;
-    if (!source || typeof source !== "object" || !source.answers || !source.passport) {
+    const parsed = JSON.parse(text.replace(/^\uFEFF/, "").trim());
+    const imported = coerceImportedDraft(parsed);
+    if (!imported) {
       alert("Этот файл не похож на черновик анкеты.");
       return;
     }
 
-    const restored = normalizeLoadedState(parsed);
+    const restored = normalizeLoadedState(imported);
     restored.meta.lastImportedAt = new Date().toISOString();
     Object.assign(state, restored);
     saveState();
@@ -2302,75 +2413,16 @@ async function savePayloadToServer(payload) {
   }
 }
 
-async function compressJsonToBase64Url(payload) {
-  const json = JSON.stringify(payload);
-  if (typeof CompressionStream === "undefined") {
-    throw new Error("CompressionStream is not supported in this browser.");
-  }
-
-  const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"));
-  const compressedBuffer = await new Response(stream).arrayBuffer();
-  const bytes = new Uint8Array(compressedBuffer);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-async function buildGitHubIssueUrl(payload) {
-  const baseUrl = GITHUB_ISSUE_URL || (GITHUB_OWNER && GITHUB_REPO
-    ? `https://github.com/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/issues/new`
-    : "");
-  if (!baseUrl) {
-    return "";
-  }
-
-  const submittedAt = String(payload?.meta?.timestamp || new Date().toISOString());
-  const title = `[questionnaire-response] ${submittedAt.slice(0, 10)}`;
-  const encodedPayload = await compressJsonToBase64Url(payload);
-  const body = `qr1:${encodedPayload}`;
-
-  const params = new URLSearchParams({
-    title,
-    body,
-  });
-  if (GITHUB_ISSUE_LABEL) {
-    params.set("labels", GITHUB_ISSUE_LABEL);
-  }
-
-  return `${baseUrl}?${params.toString()}`;
-}
-
 async function submitResults() {
   if (!isReviewComplete()) {
     render();
     return;
   }
 
-  const payload = buildPayload();
-  const issueUrl = await buildGitHubIssueUrl(payload);
-  if (!issueUrl) {
-    downloadPayload();
-    state.meta.submittedAt = new Date().toISOString();
-    state.meta.submissionMode = "download";
-    state.stage = "done";
-    state.meta.completedAt = new Date().toISOString();
-    saveState();
-    render();
-    scrollToTop();
-    return;
-  }
-
-  const popup = window.open(issueUrl, "_blank", "noopener,noreferrer");
-  if (!popup) {
-    window.location.href = issueUrl;
-    return;
-  }
+  downloadPayload();
 
   state.meta.submittedAt = new Date().toISOString();
-  state.meta.submissionMode = "github-issue";
+  state.meta.submissionMode = "download";
   state.meta.submissionId = crypto.randomUUID();
 
   state.stage = "done";

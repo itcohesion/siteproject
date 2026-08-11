@@ -8,9 +8,8 @@ const APP_TITLE = "Готовность к совместной работе: д
 const RESPONSE_API_URL = String(globalThis.QUESTIONNAIRE_RESULTS_API_URL || "").trim();
 const GITHUB_OWNER = String(globalThis.QUESTIONNAIRE_GITHUB_OWNER || "").trim();
 const GITHUB_REPO = String(globalThis.QUESTIONNAIRE_GITHUB_REPO || "").trim();
-const GITHUB_BRANCH = String(globalThis.QUESTIONNAIRE_GITHUB_BRANCH || "main").trim() || "main";
-const GITHUB_TOKEN = String(globalThis.QUESTIONNAIRE_GITHUB_TOKEN || "").trim();
-const GITHUB_PATH_PREFIX = String(globalThis.QUESTIONNAIRE_GITHUB_PATH_PREFIX || "responses").trim().replace(/^\/+|\/+$/g, "") || "responses";
+const GITHUB_ISSUE_LABEL = String(globalThis.QUESTIONNAIRE_GITHUB_ISSUE_LABEL || "questionnaire-response").trim() || "questionnaire-response";
+const GITHUB_ISSUE_URL = String(globalThis.QUESTIONNAIRE_GITHUB_ISSUE_URL || "").trim();
 
 document.title = APP_TITLE;
 
@@ -1678,11 +1677,9 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 }
 
 function renderDone() {
-  const submissionLabel = state.meta.submissionMode === "github"
-    ? "Сохранено на GitHub."
-    : state.meta.submissionMode === "server"
-      ? "Сохранено в хранилище и готово к экспорту в GitHub."
-      : "Файл результатов был скачан локально.";
+  const submissionLabel = state.meta.submissionMode === "github-issue"
+    ? "Откроется GitHub issue. После нажатия Submit new issue ответ сохранится в репозитории."
+    : "Файл результатов был скачан локально.";
   return `
     <article class="done-card">
       <h2 class="section-title">Готово</h2>
@@ -2278,74 +2275,36 @@ async function savePayloadToServer(payload) {
   }
 }
 
-function encodeUtf8Base64(text) {
-  const bytes = new TextEncoder().encode(text);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
-
-function buildGitHubResponsePath(payload) {
-  const iso = String(payload?.submittedAt || new Date().toISOString())
-    .replaceAll(":", "-")
-    .replaceAll(".", "-");
-  const id = String(payload?.submissionId || crypto.randomUUID()).replaceAll("/", "-");
-  const prefix = GITHUB_PATH_PREFIX ? `${GITHUB_PATH_PREFIX}/` : "";
-  return `${prefix}${new Date().toISOString().slice(0, 10)}/${iso}-${id}.json`;
-}
-
-async function savePayloadToGitHub(payload) {
-  if (!GITHUB_OWNER || !GITHUB_REPO || !GITHUB_TOKEN) {
-    return null;
+function buildGitHubIssueUrl(payload) {
+  const baseUrl = GITHUB_ISSUE_URL || (GITHUB_OWNER && GITHUB_REPO
+    ? `https://github.com/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/issues/new`
+    : "");
+  if (!baseUrl) {
+    return "";
   }
 
-  const path = buildGitHubResponsePath(payload);
-  const url = `https://api.github.com/repos/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/contents/${path.split("/").map((part) => encodeURIComponent(part)).join("/")}`;
-  const body = {
-    message: `Add questionnaire response ${payload?.submissionId || ""}`.trim(),
-    content: encodeUtf8Base64(JSON.stringify(payload, null, 2)),
-    branch: GITHUB_BRANCH,
-    committer: {
-      name: "Questionnaire Bot",
-      email: "questionnaire-bot@users.noreply.github.com",
-    },
-  };
+  const submittedAt = String(payload?.meta?.timestamp || new Date().toISOString());
+  const title = `[questionnaire-response] Ответ анкеты ${submittedAt.slice(0, 10)}`;
+  const body = [
+    "### JSON ответа",
+    "",
+    "```json",
+    JSON.stringify(payload, null, 2),
+    "```",
+    "",
+    `- source: questionnaire`,
+    `- submitted_at: ${submittedAt}`,
+  ].join("\n");
 
-  const response = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    body: JSON.stringify(body),
+  const params = new URLSearchParams({
+    title,
+    body,
   });
-
-  const text = await response.text();
-  let data = null;
-  if (text.trim()) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
+  if (GITHUB_ISSUE_LABEL) {
+    params.set("labels", GITHUB_ISSUE_LABEL);
   }
 
-  if (!response.ok) {
-    const message = data?.message || `GitHub returned ${response.status}`;
-    throw new Error(message);
-  }
-
-  return {
-    path,
-    sha: data?.content?.sha || data?.commit?.sha || null,
-    url: data?.content?.html_url || data?.content?.git_url || null,
-    commitSha: data?.commit?.sha || null,
-  };
+  return `${baseUrl}?${params.toString()}`;
 }
 
 async function submitResults() {
@@ -2355,36 +2314,28 @@ async function submitResults() {
   }
 
   const payload = buildPayload();
-
-  let savedDestination = null;
-  let submittedRecord = null;
-  try {
-    submittedRecord = await savePayloadToGitHub(payload);
-    if (submittedRecord) {
-      savedDestination = "github";
-    }
-  } catch (error) {
-    console.error(error);
-  }
-
-  if (!savedDestination) {
-    try {
-      submittedRecord = await savePayloadToServer(payload);
-      if (RESPONSE_API_URL) {
-        savedDestination = "server";
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  if (!savedDestination) {
+  const issueUrl = buildGitHubIssueUrl(payload);
+  if (!issueUrl) {
     downloadPayload();
+    state.meta.submittedAt = new Date().toISOString();
+    state.meta.submissionMode = "download";
+    state.stage = "done";
+    state.meta.completedAt = new Date().toISOString();
+    saveState();
+    render();
+    scrollToTop();
+    return;
+  }
+
+  const popup = window.open(issueUrl, "_blank", "noopener,noreferrer");
+  if (!popup) {
+    window.location.href = issueUrl;
+    return;
   }
 
   state.meta.submittedAt = new Date().toISOString();
-  state.meta.submissionMode = savedDestination || "download";
-  state.meta.submissionId = submittedRecord?.id || submittedRecord?.submissionId || submittedRecord?.commitSha || state.meta.submissionId;
+  state.meta.submissionMode = "github-issue";
+  state.meta.submissionId = crypto.randomUUID();
 
   state.stage = "done";
   state.meta.completedAt = new Date().toISOString();

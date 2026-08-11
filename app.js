@@ -1070,7 +1070,7 @@ function renderDefinitionGrid(items) {
 }
 
 function renderReview() {
-  const payload = buildPayload();
+  const payload = buildSubmissionPayload();
   const followupChecked = state.followup.wantDetailedReport ? "checked" : "";
   const cooperationScore = calculateCooperationScore();
   const cooperationLevel = getCooperationLevel(cooperationScore);
@@ -2169,6 +2169,33 @@ function buildPayload() {
         answer: state.answers.opm2[index],
       })),
       scores: opm2,
+    },
+  };
+}
+
+function buildSubmissionPayload() {
+  return {
+    kind: "questionnaire-response",
+    submittedAt: new Date().toISOString(),
+    respondent: {
+      position: state.passport.position.trim(),
+      gender: state.passport.gender,
+      age: Number(state.passport.age),
+      totalExperienceYears: Number(state.passport.totalExperienceYears),
+      roleInProject: state.passport.roleInProject,
+      influenceOnProject: Boolean(state.passport.influenceOnProject),
+      hasSubordinates: Boolean(state.passport.hasSubordinates),
+    },
+    followup: {
+      wantDetailedReport: Boolean(state.followup.wantDetailedReport),
+      email: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
+      detailedReportEmail: state.followup.wantDetailedReport ? state.followup.email.trim() : "",
+    },
+    answers: {
+      cooperation: state.answers.cooperation,
+      kupreychenko: state.answers.kupreychenko,
+      trsi: state.answers.trsi,
+      opm2: state.answers.opm2,
     },
   };
 }

@@ -1784,14 +1784,10 @@ function normalizeRange(value, sourceMin, sourceMax, targetMin, targetMax) {
 }
 
 function renderDone() {
-  const submissionLabel = state.meta.submissionMode === "email"
-    ? "Письмо с результатами отправлено."
-    : "Анкета завершена. Благодарим за участие в опросе!";
   return `
     <article class="done-card">
       <h2 class="section-title">Готово</h2>
       <p class="section-copy">Анкета завершена. Благодарим за участие в опросе!</p>
-      <p class="summary-help">${submissionLabel}</p>
       <div class="footer-row">
         <button class="btn primary" type="button" data-action="restart">Пройти еще раз</button>
       </div>

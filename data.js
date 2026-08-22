@@ -35,11 +35,11 @@ globalThis.surveyData = {
     },
     {
       name: "roleInProject",
-      label: "Какая роль вам характерна",
-      type: "select",
+      label: "Какая роль вам характерна на проекте",
+      type: "multiselect",
       required: true,
+      helperText: "Можно выбрать несколько вариантов.",
       options: [
-        { value: "", label: "Выберите роль" },
         { value: "initiator", label: "Инициатор изменений" },
         { value: "implementer", label: "Внедренец изменений" },
         { value: "affected", label: "Изменения затрагивают меня и мою работу" },
@@ -366,8 +366,8 @@ globalThis.surveyData = {
           { key: "am", label: "АМ", items: [1, 8, 12] },
         ],
         secondary: [
-          { key: "autonomous", label: "Автономная мотивация", items: ["vm", "int", "ide"] },
-          { key: "controlled", label: "Контролируемая мотивация", items: ["intr", "exs", "am"] },
+          { key: "autonomous", label: "Автономная (зависит от ваших собственных мотивов)", items: ["vm", "int", "ide"] },
+          { key: "controlled", label: "Контролируемая (зависит от внешних факторов и внешнего влияния)", items: ["intr", "exs", "am"] },
           { key: "rai", label: "RAI", items: ["autonomous", "controlled"] },
         ],
       },

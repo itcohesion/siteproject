@@ -14,7 +14,7 @@ document.title = APP_TITLE;
 
 const stageOrder = ["intro", "passport", "cooperation", "kupreychenko", "trsi", "opm2", "review", "done"];
 const stageLabels = {
-  intro: "Ввод",
+  intro: "Перед началом",
   passport: "Профиль участника",
   cooperation: "Сотрудничество",
   kupreychenko: "Доверие",
@@ -32,6 +32,8 @@ const passportSelectLabels = {
   implementer: "Внедренец изменений",
   affected: "Изменения затрагивают меня и мою работу",
 };
+
+const projectRoleValues = ["initiator", "implementer", "affected"];
 
 const app = document.querySelector("#app");
 const state = loadState();
@@ -61,7 +63,7 @@ function createInitialState() {
       gender: "",
       age: "",
       totalExperienceYears: "",
-      roleInProject: "",
+      roleInProject: [],
       influenceOnProject: false,
       hasSubordinates: false,
     },
@@ -103,7 +105,7 @@ function createDemoReviewState() {
       gender: "male",
       age: "34",
       totalExperienceYears: "10",
-      roleInProject: "initiator",
+      roleInProject: ["initiator", "implementer"],
       influenceOnProject: true,
       hasSubordinates: true,
     },
@@ -171,7 +173,7 @@ function normalizeLoadedState(raw) {
       gender: typeof passport.gender === "string" ? passport.gender : fresh.passport.gender,
       age: typeof passport.age === "string" || typeof passport.age === "number" ? String(passport.age) : fresh.passport.age,
       totalExperienceYears: typeof passport.totalExperienceYears === "string" || typeof passport.totalExperienceYears === "number" ? String(passport.totalExperienceYears) : fresh.passport.totalExperienceYears,
-      roleInProject: typeof passport.roleInProject === "string" ? passport.roleInProject : fresh.passport.roleInProject,
+      roleInProject: normalizeProjectRoles(passport.roleInProject),
       influenceOnProject: Boolean(passport.influenceOnProject),
       hasSubordinates: Boolean(passport.hasSubordinates),
     },
@@ -242,7 +244,7 @@ function convertResultPayloadToDraftState(raw) {
           respondent.total_experience_years === null || respondent.total_experience_years === undefined
             ? ""
             : String(respondent.total_experience_years),
-        roleInProject: typeof respondent.role_in_project === "string" ? respondent.role_in_project : "",
+        roleInProject: normalizeProjectRoles(respondent.role_in_project),
         influenceOnProject: Boolean(respondent.influence_on_project),
         hasSubordinates: Boolean(respondent.has_subordinates),
       },
@@ -359,6 +361,100 @@ function isValidScaleValue(value, min, max) {
   return Number.isInteger(number) && number >= min && number <= max;
 }
 
+function normalizeProjectRoles(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.filter((item) => projectRoleValues.includes(item))));
+  }
+  if (typeof value === "string" && projectRoleValues.includes(value)) {
+    return [value];
+  }
+  return [];
+}
+
+function splitTextIntoTwoLines(text, targetLength = 34, maxLines = 3) {
+  const clean = String(text || "").trim();
+  if (!clean) {
+    return [];
+  }
+  if (clean.length <= targetLength) {
+    return [clean];
+  }
+  const words = clean.split(/\s+/);
+  if (words.length < 2) {
+    return [clean];
+  }
+
+  const scoreLines = (lines) => {
+    if (!lines.length) {
+      return Infinity;
+    }
+    const lengths = lines.map((line) => line.length);
+    const longest = Math.max(...lengths);
+    const totalDeviation = lengths.reduce((sum, length) => sum + Math.abs(length - targetLength), 0);
+    const overLimitPenalty = Math.max(0, longest - targetLength) * 3;
+    const lineCountPenalty = Math.max(0, lines.length - 1) * 1.5;
+    return totalDeviation + overLimitPenalty + lineCountPenalty;
+  };
+
+  const findBestSplit = (lineCount) => {
+    if (lineCount <= 1 || words.length < lineCount) {
+      return [clean];
+    }
+
+    let bestLines = [clean];
+    let bestScore = Infinity;
+
+    if (lineCount === 2) {
+      for (let first = 1; first <= words.length - 1; first += 1) {
+        const lines = [
+          words.slice(0, first).join(" "),
+          words.slice(first).join(" "),
+        ];
+        const score = scoreLines(lines);
+        if (score < bestScore) {
+          bestScore = score;
+          bestLines = lines;
+        }
+      }
+      return bestLines;
+    }
+
+    if (lineCount === 3) {
+      for (let first = 1; first <= words.length - 2; first += 1) {
+        for (let second = first + 1; second <= words.length - 1; second += 1) {
+          const lines = [
+            words.slice(0, first).join(" "),
+            words.slice(first, second).join(" "),
+            words.slice(second).join(" "),
+          ];
+          const score = scoreLines(lines);
+          if (score < bestScore) {
+            bestScore = score;
+            bestLines = lines;
+          }
+        }
+      }
+      return bestLines;
+    }
+
+    return [clean];
+  };
+
+  const twoLineSplit = findBestSplit(2);
+  if (maxLines < 3 || words.length < 4) {
+    return twoLineSplit;
+  }
+
+  const threeLineSplit = findBestSplit(3);
+  if (threeLineSplit.length < 3) {
+    return twoLineSplit;
+  }
+
+  const twoLineScore = scoreLines(twoLineSplit);
+  const threeLineScore = scoreLines(threeLineSplit);
+  return threeLineScore <= twoLineScore + 1 ? threeLineSplit : twoLineSplit;
+}
+
 function countFilled(values) {
   return values.reduce((sum, value) => sum + (isFilled(value) ? 1 : 0), 0);
 }
@@ -446,7 +542,7 @@ function isPassportComplete() {
     && String(p.gender).trim()
     && isPositiveNumberField(p.age)
     && isPositiveNumberField(p.totalExperienceYears)
-    && String(p.roleInProject).trim()
+    && (Array.isArray(p.roleInProject) ? p.roleInProject.length > 0 : String(p.roleInProject).trim())
   );
 }
 
@@ -711,7 +807,7 @@ function render() {
 
   app.innerHTML = `
     <input id="draft-import-input" type="file" accept="application/json,.json" hidden data-action="import-draft" />
-    <div class="shell">
+    <div class="shell shell-${escapeHtml(state.stage)}">
       <header class="topbar">
         <div class="topbar-inner">
           <div class="brand-row">
@@ -769,7 +865,7 @@ function currentStageIndex() {
 
 function currentProgressLabel() {
   if (state.stage === "intro") {
-    return "Ввод";
+    return "Перед началом";
   }
   if (state.stage === "passport") {
     return "Профиль участника";
@@ -837,6 +933,10 @@ function renderIntroView() {
       <div class="section-head">
         <h2 class="section-title">Перед началом</h2>
         <p class="section-copy">Сначала заполните короткий профиль участника, затем пройдёте четыре методики подряд. Прогресс сохраняется автоматически, поэтому при необходимости можно закрыть страницу и вернуться позже.</p>
+      </div>
+
+      <div class="intro-research-note">
+        Данное исследование проводится в рамках магистерской диссертации.
       </div>
 
       <div class="notice">
@@ -910,6 +1010,29 @@ function renderPassportField(field) {
           <input type="checkbox" name="${escapeHtml(field.name)}" ${value ? "checked" : ""} />
           <span>${escapeHtml(field.label)}</span>
         </label>
+      </div>
+    `;
+  }
+
+  if (field.type === "multiselect") {
+    const selected = Array.isArray(value) ? value : normalizeProjectRoles(value);
+    return `
+      <div class="passport-field wide">
+        <span class="field-label">${escapeHtml(field.label)}${field.required ? " *" : ""}</span>
+        ${field.helperText ? `<p class="field-hint">${escapeHtml(field.helperText)}</p>` : ""}
+        <div class="passport-multiselect">
+          ${field.options.map((option) => `
+            <label class="check-card">
+              <input
+                type="checkbox"
+                name="${escapeHtml(field.name)}"
+                value="${escapeHtml(option.value)}"
+                ${selected.includes(option.value) ? "checked" : ""}
+              />
+              <span>${escapeHtml(option.label)}</span>
+            </label>
+          `).join("")}
+        </div>
       </div>
     `;
   }
@@ -1071,12 +1194,12 @@ function renderMethodQuestionCard(methodKey, method, item, absoluteIndex) {
 }
 
 const kupreychenkoComponentDefinitions = [
-  { label: "Надежность", description: "Убеждение, что человек надёжен." },
-  { label: "Единство", description: "Единый взгляд на мир и общие ценности." },
-  { label: "Знание", description: "Убеждённость в понимании человека и его предсказуемости." },
-  { label: "Приязнь", description: "Чувство привязанности, принятия, любви." },
-  { label: "Расчет", description: "Доверие, основанное на рациональном расчете." },
-  { label: "Недостатки", description: "Представления о недостатках другого человека." },
+  { label: "Надежность", description: "Способен ли человек прийти на помощь, поддержать в трудной ситуации." },
+  { label: "Единство", description: "Единство целей, убеждений, ценностей." },
+  { label: "Знание", description: "Убежденность, что мы понимаем человека и он предсказуем." },
+  { label: "Приязнь", description: "Привязанность, принятие другого человека." },
+  { label: "Расчет", description: "На основе имеющихся фактов о человеке предполагаем, что он оправдает доверие." },
+  { label: "Недостатки", description: "Сформировавшееся убеждение и представление о недостатках человека." },
 ];
 
 const trsiFactorDefinitions = [
@@ -1142,26 +1265,29 @@ const trsiDetailedDefinitions = [
   },
 ];
 
+const trsiAcceptanceDetailedDefinitions = trsiDetailedDefinitions.slice(0, 4);
+const trsiRejectionDetailedDefinitions = trsiDetailedDefinitions.slice(4);
+
 const kupreychenkoTypeDefinitions = [
   {
     label: "Понимающий людей",
-    description: "Характерен низкой дифференциацией и высокими показателями по компоненту «Знание».",
+    description: "Отличается низкой дифференциацией доверия и недоверия и высокими оценками по компоненту «Знание», особенно в отношении людей, которым не доверяет. Уверен в своей способности прогнозировать поведение людей, верит в добрую природу людей и считает, что большинство из них склонны к сотрудничеству и взаимопомощи. Занимает активную жизненную позицию, а высокая значимость доверия является основой для тесной взаимосвязи с людьми.",
   },
   {
     label: "Сильно дифференцирующий людей",
-    description: "Отличается высокой дифференциацией оценок доверия и недоверия.",
+    description: "Отличается высокой дифференциацией оценок доверия и недоверия. Делит людей на своих и чужих, требователен к себе и другим, бескомпромиссен в оценках и суждениях. В деловых отношениях обычно нужны заметные усилия, чтобы заслужить его доверие.",
   },
   {
     label: "Доверяющий на основе надежности и приязни",
-    description: "Характерен высокими оценками по компоненту «Знание» и большой диверсификацией оценок недостатков.",
+    description: "Характерен высокими оценками по компоненту «Знание» и большой диверсификацией оценок недостатков. Высоко ценит здоровье, любовь, семейные ценности, терпимость и чуткость. Для него важно наличие доверия к близкому человеку.",
   },
   {
     label: "Амбивалентно доверяющий",
-    description: "Одновременно высоко оценивает недостатки человека, которому доверяет, и позитивные компоненты доверия: Знание, Приязнь, Единство, Расчет.",
+    description: "Одновременно высоко оценивает недостатки человека, которому доверяет, и позитивные компоненты доверия: Знание, Приязнь, Единство, Расчет. Доверие у него регулируется скорее эмоционально, он может слепо доверять и подменять доверие другим феноменом — верой.",
   },
   {
     label: "Недифференцирующий людей",
-    description: "Отличается низкой дифференциацией показателей и низкой оценкой Расчета в отношениях с человеком, которому доверяют больше всего, при высоких оценках этой шкалы в отношениях с тем, кто доверия не оправдал.",
+    description: "Слабо различает доверие и недоверие: в отношениях с человеком, которому доверяют больше всего, компонент «Расчёт» выражен низко, а в отношениях с тем, кто доверия не оправдал, — заметно выше. Для взрослых людей это обычно говорит о том, что доверительные отношения занимают в жизни скорее второстепенное место.",
   },
 ];
 
@@ -1241,14 +1367,7 @@ function renderReview() {
         </section>
 
         <section class="summary-card summary-card-wide">
-          <h3>ОПМ-2</h3>
-          <div class="summary-value">Индекс относительной автономии ${formatSignedScore(payload.derived.opm2.rai)}</div>
-          <p class="summary-help">Положительное значение означает, что автономная мотивация выражена сильнее контролируемой.</p>
-          <ul class="details-list">
-            <li><span>Автономная</span><strong>${roundScore(payload.derived.opm2.autonomous)}</strong></li>
-            <li><span>Контролируемая</span><strong>${roundScore(payload.derived.opm2.controlled)}</strong></li>
-            <li><span>Индекс относительной автономии</span><strong>${roundScore(payload.derived.opm2.rai)}</strong></li>
-          </ul>
+          <h3>Результаты по опроснику профессиональной мотивации</h3>
           ${renderOpm2ChartPanel(payload.opm2.scores)}
         </section>
       </div>
@@ -1271,7 +1390,14 @@ function renderReview() {
         ${renderDefinitionGrid(trsiGroupDefinitions)}
         <div class="interpretation-block">
           <h5>Подробные шкалы</h5>
-          ${renderDefinitionGrid(trsiDetailedDefinitions)}
+          <div class="interpretation-block">
+            <h5>Принятие изменений</h5>
+            ${renderDefinitionGrid(trsiAcceptanceDetailedDefinitions)}
+          </div>
+          <div class="interpretation-block">
+            <h5>Непринятие изменений</h5>
+            ${renderDefinitionGrid(trsiRejectionDetailedDefinitions)}
+          </div>
         </div>
       </section>
 
@@ -1317,8 +1443,8 @@ function renderOpm2ChartPanel(scores) {
   return `
     <div class="opm2-chart-grid">
       ${renderRadarChartCard({
-        title: "Шкалы ОПМ-2",
-        subtitle: "Сравнительный профиль по шести шкалам",
+        title: "Выраженность компонентов мотивации",
+        subtitle: "Расшифровку шкал смотрите ниже",
         axes: primaryAxes,
         min: 1,
         max: 5,
@@ -1329,10 +1455,12 @@ function renderOpm2ChartPanel(scores) {
         ${renderDefinitionGrid(opm2ScaleDefinitions)}
       </div>
       ${renderIntegralComparisonCard({
-        title: "Интегральные показатели",
-        subtitle: "Автономная и контролируемая мотивация на общей линейной шкале",
+        title: "Автономная и контролируемая мотивация",
+        subtitle: "На линейной шкале видно соотношение внутренней и внешней направленности мотивации.",
         autonomous: scores.autonomous,
         controlled: scores.controlled,
+        autonomousDetail: "зависит от ваших собственных мотивов",
+        controlledDetail: "зависит от внешних факторов и внешнего влияния",
         rai: scores.rai,
         min: 1,
         max: 5,
@@ -1356,12 +1484,12 @@ function renderTrsiChartPanel(scores) {
   return `
     <div class="opm2-chart-grid">
       ${renderRadarChartCard({
-        title: "Шкалы ТРСИ",
-        subtitle: "Профиль по семи шкалам реагирования на изменения",
+        title: "Выраженность по шкалам реагирования на изменения",
+        subtitle: "На диаграмме показана выраженность по шкалам реагирования на ситуацию изменений.",
         axes: primaryAxes,
         min: 1,
         max: 4,
-        note: "Шкалы отображаются по средним значениям. Чем дальше от центра, тем выраженнее стратегия.",
+        note: "Более подробно по шкалам можно посмотреть по гиперссылке выше.",
       })}
       ${renderLinearComparisonCard({
         title: "Интегральные показатели",
@@ -1380,26 +1508,26 @@ function renderTrsiChartPanel(scores) {
   `;
 }
 function renderKupreychenkoChartPanel(scores) {
-  const axes = surveyData.methodologies.kupreychenko.scoring.trust.map((group) => ({
-    label: group.label,
-    trust: scores.trust[group.key],
-    distrust: scores.distrust[group.key],
-  }));
+  const axes = surveyData.methodologies.kupreychenko.scoring.trust.map((group) => {
+    const definition = kupreychenkoComponentDefinitions.find((item) => item.label === group.label);
+    return {
+      label: group.label,
+      detail: definition?.description || "",
+      trust: scores.trust[group.key],
+      distrust: scores.distrust[group.key],
+    };
+  });
 
   return `
     <div class="opm2-chart-grid">
       ${renderRadarComparisonChartCard({
-        title: "Шкалы доверия и недоверия",
-        subtitle: "Сравнение доверия и недоверия по шести факторам методики Купрейченко",
+        title: "Значимость компонентов доверия",
+        subtitle: "На диаграмме вы можете увидеть значимость компонентов доверия, необходимых для того, чтобы вы доверяли другому человеку, а также влияние этих компонентов на ситуацию недоверия.",
         axes,
         min: 1,
         max: 5,
-        note: "Зелёная линия - доверие, оранжевая - недоверие. Подписи на осях показывают оба значения сразу, чтобы дельта читалась без отдельной расшифровки.",
+        note: "Зелёная линия показывает доверие, оранжевая - недоверие, синяя - дельту между ними.",
       })}
-      <div class="interpretation-block">
-        <h5>Расшифровка компонентов доверия</h5>
-        ${renderDefinitionGrid(kupreychenkoComponentDefinitions)}
-      </div>
     </div>
   `;
 }
@@ -1423,9 +1551,9 @@ function renderRadarComparisonChartCard({ title, subtitle, axes, min, max, note 
 
 function renderRadarComparisonSvg(axes, min, max) {
   const width = 980;
-  const height = 820;
+  const height = 900;
   const cx = 490;
-  const cy = 355;
+  const cy = 395;
   const radius = 250;
   const levels = 5;
   const angleStep = (Math.PI * 2) / axes.length;
@@ -1468,13 +1596,19 @@ function renderRadarComparisonSvg(axes, min, max) {
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const delta = axis.trust - axis.distrust;
-    const deltaClass = delta >= 0 ? "radar-label-score-delta radar-label-score-delta-positive" : "radar-label-score-delta radar-label-score-delta-negative";
+    const detailLines = splitTextIntoTwoLines(axis.detail, 24, 3);
+    const scoreSegments = [
+      `<tspan x="${labelX}" dy="${detailLines.length ? "16" : "19"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
+      `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
+      `<tspan dx="12" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
+      `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
+      `<tspan dx="12" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
+    ].join("");
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        <tspan x="${labelX}" dy="17" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>
-        <tspan x="${labelX}" dy="13" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>
-        <tspan x="${labelX}" dy="13" class="radar-label-score ${deltaClass}">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>
+        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "13" : "12"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
+        ${scoreSegments}
       </text>
     `;
   }).join("");
@@ -1531,18 +1665,18 @@ function renderRadarComparisonSvg(axes, min, max) {
   `;
 }
 
-function renderIntegralComparisonCard({ title, subtitle, autonomous, controlled, rai, min, max, note }) {
+function renderIntegralComparisonCard({ title, subtitle, autonomous, controlled, autonomousDetail = "", controlledDetail = "", rai, min, max, note }) {
   const values = [
-    { key: "autonomous", label: "Автономная мотивация", value: autonomous, accent: "var(--accent)" },
-    { key: "controlled", label: "Контролируемая мотивация", value: controlled, accent: "var(--accent-2)" },
+    { key: "autonomous", label: "Автономная", detail: autonomousDetail, value: autonomous, accent: "var(--accent)" },
+    { key: "controlled", label: "Контролируемая", detail: controlledDetail, value: controlled, accent: "var(--accent-2)" },
   ];
 
   const width = 920;
-  const height = 360;
+  const height = 392;
   const left = 340;
   const right = 860;
   const axisWidth = right - left;
-  const rowY = [120, 210];
+  const rowY = [132, 238];
   const trackHeight = 18;
 
   const scaleX = (value) => left + ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * axisWidth;
@@ -1563,9 +1697,13 @@ function renderIntegralComparisonCard({ title, subtitle, autonomous, controlled,
     const x = scaleX(item.value);
     const labelFill = index === 0 ? "var(--accent)" : "var(--accent-2)";
     const barWidth = Math.max(10, x - left);
+    const detailLines = splitTextIntoTwoLines(item.detail, 34);
     return `
       <g>
-        <text x="30" y="${y + 6}" class="comparison-row-label">${escapeHtml(item.label)}</text>
+        <text x="30" y="${y - 1}" class="comparison-row-label">
+          <tspan x="30" dy="0">${escapeHtml(item.label)}</tspan>
+          ${detailLines.map((line, lineIndex) => `<tspan x="30" dy="${lineIndex === 0 ? "14" : "12"}" class="comparison-row-label-detail">${escapeHtml(line)}</tspan>`).join("")}
+        </text>
         <rect x="${left}" y="${y - trackHeight / 2}" width="${axisWidth}" height="${trackHeight}" rx="9" class="comparison-track"></rect>
         <rect x="${left}" y="${y - trackHeight / 2}" width="${barWidth}" height="${trackHeight}" rx="9" class="comparison-bar" style="fill:${labelFill};"></rect>
         <circle cx="${x}" cy="${y}" r="8" class="comparison-point" style="fill:${labelFill};"></circle>
@@ -1586,7 +1724,7 @@ function renderIntegralComparisonCard({ title, subtitle, autonomous, controlled,
         <h4 class="chart-title">${escapeHtml(title)}</h4>
         <p class="chart-subtitle">${escapeHtml(subtitle)}</p>
       </div>
-      <svg class="comparison-svg" viewBox="0 0 920 360" role="img" aria-label="Линейное сравнение интегральных показателей">
+      <svg class="comparison-svg" viewBox="0 0 920 392" role="img" aria-label="Линейное сравнение интегральных показателей">
         <line x1="${left}" y1="62" x2="${right}" y2="62" class="comparison-axis"></line>
         ${tickMarks}
         ${series}
@@ -1865,6 +2003,10 @@ function formatGender(value) {
 }
 
 function formatProjectRole(value) {
+  if (Array.isArray(value)) {
+    const labels = value.map((item) => passportSelectLabels[item]).filter(Boolean);
+    return labels.length ? labels.join(", ") : "—";
+  }
   return passportSelectLabels[value] || "—";
 }
 
@@ -1978,6 +2120,14 @@ function handleChange(event) {
 
   if (Object.hasOwn(state.passport, target.name)) {
     if (target.type === "checkbox") {
+      if (target.name === "roleInProject") {
+        const current = normalizeProjectRoles(state.passport.roleInProject);
+        const next = target.checked
+          ? Array.from(new Set([...current, target.value]))
+          : current.filter((item) => item !== target.value);
+        updatePassportField(target.name, next, true);
+        return;
+      }
       updatePassportField(target.name, target.checked, true);
       return;
     }
@@ -2210,7 +2360,7 @@ function buildPayload() {
         gender: state.passport.gender,
         age: Number(state.passport.age),
         total_experience_years: Number(state.passport.totalExperienceYears),
-        role_in_project: state.passport.roleInProject,
+        role_in_project: Array.isArray(state.passport.roleInProject) ? [...state.passport.roleInProject] : [],
         influence_on_project: Boolean(state.passport.influenceOnProject),
         has_subordinates: Boolean(state.passport.hasSubordinates),
         email: state.followup.email.trim(),
@@ -2287,7 +2437,7 @@ function buildSubmissionPayload() {
       gender: state.passport.gender,
       age: Number(state.passport.age),
       totalExperienceYears: Number(state.passport.totalExperienceYears),
-      roleInProject: state.passport.roleInProject,
+      roleInProject: Array.isArray(state.passport.roleInProject) ? [...state.passport.roleInProject] : [],
       influenceOnProject: Boolean(state.passport.influenceOnProject),
       hasSubordinates: Boolean(state.passport.hasSubordinates),
       email: state.followup.email.trim(),

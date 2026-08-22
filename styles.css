@@ -11,6 +11,7 @@
   --line-strong: rgba(23, 34, 30, 0.2);
   --accent: #2f7d73;
   --accent-2: #d26d49;
+  --info: #2f6fd1;
   --accent-soft: rgba(47, 125, 115, 0.12);
   --success: #2b7d5c;
   --warning: #b86129;
@@ -310,6 +311,17 @@ img {
   color: var(--text);
 }
 
+.intro-research-note {
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(47, 125, 115, 0.18);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .intro-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -359,6 +371,13 @@ img {
   letter-spacing: 0.02em;
 }
 
+.field-hint {
+  margin: -2px 0 0;
+  color: var(--muted-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .field-control {
   width: 100%;
   min-height: 52px;
@@ -395,6 +414,12 @@ img {
   margin-top: 2px;
   accent-color: var(--accent);
   flex: none;
+}
+
+.passport-multiselect {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .radio-row {
@@ -926,11 +951,21 @@ img {
 }
 
 .radar-svg-compare .radar-label {
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .radar-svg-compare .radar-label-score {
+  font-size: 16px;
+}
+
+.radar-svg-compare .radar-label-detail {
   font-size: 13px;
+}
+
+.radar-label-score-sep {
+  fill: var(--muted-2);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .radar-label-score-trust {
@@ -942,16 +977,15 @@ img {
 }
 
 .radar-label-score-delta {
-  font-size: 11px;
-  font-weight: 700;
+  fill: var(--info);
 }
 
 .radar-label-score-delta-positive {
-  fill: var(--accent);
+  fill: var(--info);
 }
 
 .radar-label-score-delta-negative {
-  fill: var(--accent-2);
+  fill: var(--info);
 }
 
 .comparison-svg {
@@ -981,6 +1015,12 @@ img {
   fill: var(--text);
   font-size: 15px;
   font-weight: 700;
+}
+
+.comparison-row-label-detail {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .comparison-track {
@@ -1087,6 +1127,28 @@ img {
   padding-bottom: 2px;
 }
 
+.block-links .text-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 125, 115, 0.22);
+  border-bottom: none;
+  background: rgba(47, 125, 115, 0.08);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  padding-bottom: 0;
+}
+
+.block-links .text-link:hover {
+  background: rgba(47, 125, 115, 0.14);
+  border-color: rgba(47, 125, 115, 0.34);
+}
+
 .text-link:hover {
   color: var(--accent-strong);
   border-bottom-color: currentColor;
@@ -1172,6 +1234,10 @@ img {
 }
 
 @media (max-width: 820px) {
+  .shell:not(.shell-intro) .topbar {
+    display: none;
+  }
+
   .topbar-inner,
   .layout {
     padding-left: 16px;
@@ -1203,6 +1269,10 @@ img {
   }
 
   .opm2-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .passport-multiselect {
     grid-template-columns: 1fr;
   }
 }

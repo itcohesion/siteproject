@@ -927,9 +927,19 @@ function renderMain() {
   return renderDone();
 }
 
+function renderMobileStageControls({ back = false, nextLabel, nextDisabled = false, nextAction = "next-stage" }) {
+  return `
+    <div class="mobile-stage-controls" aria-label="Навигация по анкете">
+      ${back ? '<button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>' : ""}
+      <button class="btn primary" type="button" data-action="${escapeHtml(nextAction)}" ${nextDisabled ? "disabled" : ""}>${escapeHtml(nextLabel)}</button>
+    </div>
+  `;
+}
+
 function renderIntroView() {
   return `
     <article class="main-card intro-card">
+      ${renderMobileStageControls({ nextLabel: "Начать →" })}
       <div class="section-head">
         <h2 class="section-title">Перед началом</h2>
         <p class="section-copy">Сначала заполните короткий профиль участника, затем пройдёте четыре методики подряд. Прогресс сохраняется автоматически, поэтому при необходимости можно закрыть страницу и вернуться позже.</p>
@@ -980,6 +990,11 @@ function renderIntroView() {
 function renderPassportView() {
   return `
     <article class="main-card">
+      ${renderMobileStageControls({
+        back: true,
+        nextLabel: "Далее →",
+        nextDisabled: !isPassportComplete(),
+      })}
       <div class="section-head">
         <h2 class="section-title">Профиль участника</h2>
         <p class="section-copy">Заполните короткие сведения о себе, чтобы результаты можно было связать с контекстом работы.</p>
@@ -1071,9 +1086,17 @@ function renderMethodView(methodKey) {
   const pageCount = getPageCount(methodKey);
   const start = pageIndex * method.pageSize;
   const pageItems = method.questions.slice(start, start + method.pageSize);
+  const nextLabel = pageIndex === pageCount - 1
+    ? (methodKey === "opm2" ? "К проверке →" : "Следующая методика →")
+    : "Далее →";
 
   return `
     <article class="main-card">
+      ${renderMobileStageControls({
+        back: true,
+        nextLabel,
+        nextDisabled: !currentStageValid(),
+      })}
       <div class="section-head">
         <h2 class="section-title">${escapeHtml(method.title)}${method.subtitle ? ` <span style="font-family: var(--body-font); color: var(--muted); font-size: 0.62em; font-weight: 700;">${escapeHtml(method.subtitle)}</span>` : ""}</h2>
         <p class="section-copy">${escapeHtml(method.instructions).replaceAll("\n", "<br>")}</p>
@@ -1097,7 +1120,7 @@ function renderMethodView(methodKey) {
         <p class="helper-text">${escapeHtml(pageHelperText(methodKey))}</p>
         <div class="footer-row">
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
-          <button class="btn primary" type="button" data-action="next-stage" ${currentStageValid() ? "" : "disabled"}>${pageIndex === pageCount - 1 ? (methodKey === "opm2" ? "К проверке →" : "Следующая методика →") : "Далее →"}</button>
+          <button class="btn primary" type="button" data-action="next-stage" ${currentStageValid() ? "" : "disabled"}>${nextLabel}</button>
         </div>
       </div>
     </article>
@@ -1320,6 +1343,11 @@ function renderReview() {
 
   return `
     <article class="main-card" id="results-top">
+      ${renderMobileStageControls({
+        back: true,
+        nextLabel: "Завершить →",
+        nextAction: "submit-results",
+      })}
       <div class="section-head">
         <h2 class="section-title">Результаты перед завершением</h2>
         <p class="section-copy">Проверьте краткую сводку и при желании оставьте почту для подробной расшифровки результатов.</p>

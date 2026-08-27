@@ -575,6 +575,10 @@ img {
   gap: 14px;
 }
 
+.mobile-stage-controls {
+  display: none;
+}
+
 .footer-row {
   display: flex;
   gap: 12px;
@@ -1234,6 +1238,10 @@ img {
 }
 
 @media (max-width: 820px) {
+  .shell-intro .topbar {
+    position: static;
+  }
+
   .shell:not(.shell-intro) .topbar {
     display: none;
   }
@@ -1256,6 +1264,34 @@ img {
 
   .main-card {
     padding: 18px;
+  }
+
+  .mobile-stage-controls {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    justify-content: space-between;
+  }
+
+  .mobile-stage-controls .btn {
+    min-height: 46px;
+    flex: 1 1 0;
+    padding-inline: 12px;
+  }
+
+  .shell-intro .topbar-inner {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    gap: 12px;
+  }
+
+  .shell-intro .title {
+    font-size: 30px;
+  }
+
+  .shell-intro .top-meta,
+  .shell-intro .progress-block {
+    display: none;
   }
 
   .scale-grid[data-scale="7"] {

@@ -1573,8 +1573,30 @@ function renderRadarComparisonChartCard({ title, subtitle, axes, min, max, note 
         </div>
       </div>
       ${renderRadarComparisonSvg(axes, min, max)}
+      ${renderMobileRadarComparisonKey(axes)}
       ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
+  `;
+}
+
+function renderMobileRadarComparisonKey(axes) {
+  return `
+    <div class="mobile-radar-key mobile-radar-key-compare">
+      ${axes.map((axis) => {
+        const delta = axis.trust - axis.distrust;
+        return `
+          <article class="mobile-radar-key-item">
+            <h5>${escapeHtml(axis.label)}</h5>
+            ${axis.detail ? `<p>${escapeHtml(axis.detail)}</p>` : ""}
+            <div class="mobile-radar-scores">
+              <span class="score-trust">Д ${escapeHtml(roundScore(axis.trust))}</span>
+              <span class="score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</span>
+              <span class="score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</span>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
   `;
 }
 
@@ -1844,8 +1866,22 @@ function renderRadarChartCard({ title, subtitle, axes, min, max, note }) {
         <p class="chart-subtitle">${escapeHtml(subtitle)}</p>
       </div>
       ${renderRadarSvg(axes, chartValues, displayValues, min, max)}
+      ${renderMobileRadarKey(axes, displayValues)}
       ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
+  `;
+}
+
+function renderMobileRadarKey(axes, displayValues) {
+  return `
+    <div class="mobile-radar-key">
+      ${axes.map((axis, index) => `
+        <article class="mobile-radar-key-item">
+          <h5>${escapeHtml(axis.label)}</h5>
+          <strong>${escapeHtml(roundScore(displayValues[index]))}</strong>
+        </article>
+      `).join("")}
+    </div>
   `;
 }
 

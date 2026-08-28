@@ -1,4 +1,5 @@
 :root {
+  color-scheme: only light;
   --bg: #f3efe6;
   --bg-accent: #e8f1ec;
   --surface: #fffaf4;
@@ -576,6 +577,11 @@ img {
 }
 
 .mobile-stage-controls {
+  display: none;
+}
+
+.btn.mobile-review-submit,
+.btn.mobile-return-to-results {
   display: none;
 }
 
@@ -1238,6 +1244,24 @@ img {
 }
 
 @media (max-width: 820px) {
+  html,
+  body,
+  input,
+  select,
+  button {
+    color-scheme: only light;
+  }
+
+  body {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0)), linear-gradient(135deg, var(--bg), #faf7f0 58%, var(--bg-accent));
+  }
+
+  input,
+  select,
+  button {
+    -webkit-text-fill-color: currentcolor;
+  }
+
   .shell-intro .topbar {
     position: static;
   }
@@ -1277,6 +1301,111 @@ img {
     min-height: 46px;
     flex: 1 1 0;
     padding-inline: 12px;
+  }
+
+  .btn.mobile-review-submit,
+  .btn.mobile-return-to-results {
+    display: inline-flex;
+  }
+
+  .review-desktop-submit {
+    display: none;
+  }
+
+  .mobile-review-submit {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .done-card .footer-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .done-card .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .summary-card {
+    padding: 16px;
+  }
+
+  .opm2-chart-card {
+    padding: 14px 10px;
+    gap: 14px;
+  }
+
+  .chart-title {
+    font-size: 20px;
+  }
+
+  .chart-subtitle,
+  .chart-note {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .chart-legend {
+    font-size: 15px;
+    gap: 14px;
+  }
+
+  .chart-legend-swatch {
+    width: 13px;
+    height: 13px;
+  }
+
+  .radar-label {
+    font-size: 25px;
+  }
+
+  .radar-label-score {
+    font-size: 28px;
+  }
+
+  .radar-label-detail {
+    font-size: 19px;
+  }
+
+  .radar-svg-compare .radar-label {
+    font-size: 26px;
+  }
+
+  .radar-svg-compare .radar-label-score,
+  .radar-label-score-sep {
+    font-size: 29px;
+  }
+
+  .radar-svg-compare .radar-label-detail {
+    font-size: 20px;
+  }
+
+  .comparison-tick-label {
+    font-size: 17px;
+  }
+
+  .comparison-row-label,
+  .comparison-value {
+    font-size: 20px;
+  }
+
+  .comparison-row-label-detail,
+  .comparison-delta-text {
+    font-size: 16px;
+  }
+
+  .interpretation-block h5 {
+    font-size: 17px;
+  }
+
+  .definition-item h4 {
+    font-size: 17px;
+  }
+
+  .definition-item p {
+    font-size: 16px;
+    line-height: 1.5;
   }
 
   .shell-intro .topbar-inner {

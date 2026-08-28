@@ -1450,9 +1450,10 @@ function renderReview() {
           <button class="btn secondary" type="button" data-action="prev-stage">← Назад</button>
           <div class="footer-row">
             <button class="btn ghost" type="button" data-action="save-draft">Сохранить черновик</button>
-            <button class="btn primary" type="button" data-action="submit-results">Отправить результаты и завершить</button>
+            <button class="btn primary review-desktop-submit" type="button" data-action="submit-results">Отправить результаты и завершить</button>
           </div>
         </div>
+        <button class="btn primary mobile-review-submit" type="button" data-action="submit-results">Завершить →</button>
       </div>
     </article>
   `;
@@ -1956,6 +1957,7 @@ function renderDone() {
       <h2 class="section-title">Готово</h2>
       <p class="section-copy">Анкета завершена. Благодарим за участие в опросе!</p>
       <div class="footer-row">
+        <button class="btn secondary mobile-return-to-results" type="button" data-action="prev-stage">← К результатам</button>
         <button class="btn primary" type="button" data-action="restart">Пройти еще раз</button>
       </div>
     </article>

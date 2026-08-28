@@ -1357,37 +1357,38 @@ img {
   }
 
   .radar-label {
-    font-size: 25px;
+    font-size: 20px;
   }
 
   .radar-label-score {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .radar-label-detail {
-    font-size: 19px;
+    font-size: 16px;
   }
 
   .radar-svg-compare .radar-label {
-    font-size: 26px;
+    font-size: 21px;
   }
 
   .radar-svg-compare .radar-label-score,
   .radar-label-score-sep {
-    font-size: 29px;
+    font-size: 23px;
   }
 
   .radar-svg-compare .radar-label-detail {
-    font-size: 20px;
+    font-size: 16px;
   }
 
   .radar-svg {
-    width: 120%;
-    margin-left: -10%;
+    width: 110%;
+    margin-left: -5%;
+    margin-right: -5%;
   }
 
   .opm2-chart-card:has(.radar-svg) {
-    overflow: hidden;
+    overflow: visible;
   }
 
   .comparison-tick-label {

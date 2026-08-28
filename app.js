@@ -1618,14 +1618,15 @@ function renderRadarComparisonSvg(axes, min, max) {
   }).join("");
 
   const labels = axes.map((axis, index) => {
-    const [x, y] = point(angles[index], radius + 60);
+    const isSideLabel = Math.abs(Math.cos(angles[index])) > 0.35;
+    const [x, y] = point(angles[index], radius + (isSideLabel ? 28 : 54));
     const dx = x < cx - 40 ? -10 : x > cx + 40 ? 10 : 0;
     const dy = y < cy - 40 ? -8 : y > cy + 40 ? 12 : 0;
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const delta = axis.trust - axis.distrust;
-    const detailLines = splitTextIntoTwoLines(axis.detail, 24, 3);
+    const detailLines = splitTextIntoTwoLines(axis.detail, 16, 4);
     const scoreSegments = [
       `<tspan x="${labelX}" dy="${detailLines.length ? "30" : "32"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
       `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
@@ -1889,14 +1890,15 @@ function renderRadarSvg(axes, chartValues, displayValues, min, max) {
   }).join("");
 
   const labels = axes.map((axis, index) => {
-    const [x, y] = point(angles[index], radius + 48);
+    const isSideLabel = Math.abs(Math.cos(angles[index])) > 0.35;
+    const [x, y] = point(angles[index], radius + (isSideLabel ? 26 : 48));
     const dx = x < cx - 40 ? -10 : x > cx + 40 ? 10 : 0;
     const dy = y < cy - 40 ? -6 : y > cy + 40 ? 12 : 0;
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const hasDetail = Boolean(axis.detail);
-    const detailLines = hasDetail ? splitTextIntoTwoLines(axis.detail, 27, 3) : [];
+    const detailLines = hasDetail ? splitTextIntoTwoLines(axis.detail, 17, 4) : [];
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>

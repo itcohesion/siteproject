@@ -1555,7 +1555,7 @@ function renderKupreychenkoChartPanel(scores) {
         axes,
         min: 1,
         max: 5,
-        note: "Зелёная линия показывает доверие, оранжевая - недоверие, синяя - дельту между ними.",
+        note: "",
       })}
     </div>
   `;

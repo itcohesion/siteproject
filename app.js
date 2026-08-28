@@ -1573,12 +1573,13 @@ function renderRadarComparisonChartCard({ title, subtitle, axes, min, max, note 
         </div>
       </div>
       ${renderRadarComparisonSvg(axes, min, max)}
+      ${renderRadarComparisonSvg(axes, min, max, true)}
       ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
   `;
 }
 
-function renderRadarComparisonSvg(axes, min, max) {
+function renderRadarComparisonSvg(axes, min, max, mobile = false) {
   const width = 980;
   const height = 900;
   const cx = 490;
@@ -1619,23 +1620,31 @@ function renderRadarComparisonSvg(axes, min, max) {
 
   const labels = axes.map((axis, index) => {
     const isSideLabel = Math.abs(Math.cos(angles[index])) > 0.35;
-    const [x, y] = point(angles[index], radius + (isSideLabel ? 28 : 54));
+    const [x, y] = point(angles[index], radius + (mobile && isSideLabel ? 28 : mobile ? 54 : 60));
     const dx = x < cx - 40 ? -10 : x > cx + 40 ? 10 : 0;
     const dy = y < cy - 40 ? -8 : y > cy + 40 ? 12 : 0;
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const delta = axis.trust - axis.distrust;
-    const detailLines = splitTextIntoTwoLines(axis.detail, 16, 4);
-    const scoreSegments = [
-      `<tspan x="${labelX}" dy="${detailLines.length ? "30" : "32"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
-      `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
-      `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
-    ].join("");
+    const detailLines = splitTextIntoTwoLines(axis.detail, mobile ? 16 : 24, mobile ? 4 : 3);
+    const scoreSegments = mobile
+      ? [
+          `<tspan x="${labelX}" dy="${detailLines.length ? "30" : "32"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
+          `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
+          `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
+        ].join("")
+      : [
+          `<tspan x="${labelX}" dy="${detailLines.length ? "16" : "19"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
+          `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
+          `<tspan dx="12" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
+          `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
+          `<tspan dx="12" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
+        ].join("");
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "24" : "22"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
+        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${mobile ? (lineIndex === 0 ? "24" : "22") : (lineIndex === 0 ? "13" : "12")}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
         ${scoreSegments}
       </text>
     `;
@@ -1683,7 +1692,7 @@ function renderRadarComparisonSvg(axes, min, max) {
   }).join("");
 
   return `
-    <svg class="radar-svg radar-svg-compare" viewBox="0 0 ${width} ${height}" role="img" aria-label="Радарная диаграмма доверия и недоверия">
+    <svg class="radar-svg radar-svg-compare ${mobile ? "radar-svg-mobile" : "radar-svg-desktop"}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Радарная диаграмма доверия и недоверия">
       <circle cx="${cx}" cy="${cy}" r="${radius}" class="radar-outer-circle"></circle>
       ${gridPolygons}
       ${axisLines}
@@ -1843,12 +1852,13 @@ function renderRadarChartCard({ title, subtitle, axes, min, max, note }) {
         <p class="chart-subtitle">${escapeHtml(subtitle)}</p>
       </div>
       ${renderRadarSvg(axes, chartValues, displayValues, min, max)}
+      ${renderRadarSvg(axes, chartValues, displayValues, min, max, true)}
       ${note && String(note).trim() ? `<p class="chart-note">${escapeHtml(note)}</p>` : ""}
     </section>
   `;
 }
 
-function renderRadarSvg(axes, chartValues, displayValues, min, max) {
+function renderRadarSvg(axes, chartValues, displayValues, min, max, mobile = false) {
   const gradientId = `radar-fill-${++radarChartCounter}`;
   const width = 920;
   const height = 760;
@@ -1891,19 +1901,21 @@ function renderRadarSvg(axes, chartValues, displayValues, min, max) {
 
   const labels = axes.map((axis, index) => {
     const isSideLabel = Math.abs(Math.cos(angles[index])) > 0.35;
-    const [x, y] = point(angles[index], radius + (isSideLabel ? 26 : 48));
+    const [x, y] = point(angles[index], radius + (mobile && isSideLabel ? 26 : mobile ? 48 : 48));
     const dx = x < cx - 40 ? -10 : x > cx + 40 ? 10 : 0;
     const dy = y < cy - 40 ? -6 : y > cy + 40 ? 12 : 0;
     const anchor = x < cx - 40 ? "end" : x > cx + 40 ? "start" : "middle";
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const hasDetail = Boolean(axis.detail);
-    const detailLines = hasDetail ? splitTextIntoTwoLines(axis.detail, 17, 4) : [];
+    const detailLines = mobile && hasDetail ? splitTextIntoTwoLines(axis.detail, 17, 4) : [];
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "22" : "20"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
-        <tspan x="${labelX}" dy="${hasDetail ? "28" : "30"}" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
+        ${mobile
+          ? detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "22" : "20"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")
+          : hasDetail ? `<tspan x="${labelX}" dy="13" class="radar-label-detail">${escapeHtml(axis.detail)}</tspan>` : ""}
+        <tspan x="${labelX}" dy="${mobile ? (hasDetail ? "28" : "30") : (hasDetail ? "15" : "18")}" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
       </text>
     `;
   }).join("");
@@ -1924,7 +1936,7 @@ function renderRadarSvg(axes, chartValues, displayValues, min, max) {
   `).join("");
 
   return `
-      <svg class="radar-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Радиальная диаграмма">
+      <svg class="radar-svg ${mobile ? "radar-svg-mobile" : "radar-svg-desktop"}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Радиальная диаграмма">
       <defs>
         <linearGradient id="${gradientId}" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="#2f7d73" stop-opacity="0.42" />

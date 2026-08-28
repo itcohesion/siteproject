@@ -907,6 +907,10 @@ img {
   overflow: visible;
 }
 
+.radar-svg-mobile {
+  display: none;
+}
+
 .radar-outer-circle {
   fill: none;
   stroke: rgba(23, 34, 30, 0.10);
@@ -1244,6 +1248,14 @@ img {
 }
 
 @media (max-width: 820px) {
+  .radar-svg-desktop {
+    display: none;
+  }
+
+  .radar-svg-mobile {
+    display: block;
+  }
+
   html,
   body,
   input,
@@ -1381,7 +1393,7 @@ img {
     font-size: 16px;
   }
 
-  .radar-svg {
+  .radar-svg-mobile {
     width: 110%;
     margin-left: -5%;
     margin-right: -5%;

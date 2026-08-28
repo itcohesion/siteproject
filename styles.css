@@ -1381,6 +1381,15 @@ img {
     font-size: 20px;
   }
 
+  .radar-svg {
+    width: 120%;
+    margin-left: -10%;
+  }
+
+  .opm2-chart-card:has(.radar-svg) {
+    overflow: hidden;
+  }
+
   .comparison-tick-label {
     font-size: 17px;
   }

@@ -1627,16 +1627,14 @@ function renderRadarComparisonSvg(axes, min, max) {
     const delta = axis.trust - axis.distrust;
     const detailLines = splitTextIntoTwoLines(axis.detail, 24, 3);
     const scoreSegments = [
-      `<tspan x="${labelX}" dy="${detailLines.length ? "16" : "19"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
-      `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
-      `<tspan dx="12" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
-      `<tspan dx="12" class="radar-label-score-sep">·</tspan>`,
-      `<tspan dx="12" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
+      `<tspan x="${labelX}" dy="${detailLines.length ? "30" : "32"}" class="radar-label-score radar-label-score-trust">Д ${escapeHtml(roundScore(axis.trust))}</tspan>`,
+      `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-distrust">НД ${escapeHtml(roundScore(axis.distrust))}</tspan>`,
+      `<tspan x="${labelX}" dy="30" class="radar-label-score radar-label-score-delta">Δ ${escapeHtml(formatSignedScore(delta))}</tspan>`,
     ].join("");
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "13" : "12"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
+        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "24" : "22"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
         ${scoreSegments}
       </text>
     `;
@@ -1898,11 +1896,12 @@ function renderRadarSvg(axes, chartValues, displayValues, min, max) {
     const labelX = (x + dx).toFixed(1);
     const labelY = (y + dy).toFixed(1);
     const hasDetail = Boolean(axis.detail);
+    const detailLines = hasDetail ? splitTextIntoTwoLines(axis.detail, 27, 3) : [];
     return `
       <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="radar-label">
         <tspan x="${labelX}" dy="0">${escapeHtml(axis.label)}</tspan>
-        ${hasDetail ? `<tspan x="${labelX}" dy="13" class="radar-label-detail">${escapeHtml(axis.detail)}</tspan>` : ""}
-        <tspan x="${labelX}" dy="${hasDetail ? "15" : "18"}" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
+        ${detailLines.map((line, lineIndex) => `<tspan x="${labelX}" dy="${lineIndex === 0 ? "22" : "20"}" class="radar-label-detail">${escapeHtml(line)}</tspan>`).join("")}
+        <tspan x="${labelX}" dy="${hasDetail ? "28" : "30"}" class="radar-label-score">${escapeHtml(roundScore(displayValues[index]))}</tspan>
       </text>
     `;
   }).join("");

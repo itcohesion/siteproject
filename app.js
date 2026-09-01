@@ -8,6 +8,7 @@ const APP_TITLE = "Готовность к совместной работе: д
 const EMAILJS_PUBLIC_KEY = String(globalThis.QUESTIONNAIRE_EMAILJS_PUBLIC_KEY || "").trim();
 const EMAILJS_SERVICE_ID = String(globalThis.QUESTIONNAIRE_EMAILJS_SERVICE_ID || "").trim();
 const EMAILJS_TEMPLATE_ID = String(globalThis.QUESTIONNAIRE_EMAILJS_TEMPLATE_ID || "").trim();
+const QUESTIONNAIRE_AUDIENCE_ID = String(globalThis.QUESTIONNAIRE_AUDIENCE_ID || "").trim();
 const EMAILJS_API_URL = "https://api.emailjs.com/api/v1.0/email/send";
 
 document.title = APP_TITLE;
@@ -2398,6 +2399,7 @@ function buildPayload() {
   return {
     meta: {
       timestamp: new Date().toISOString(),
+      audience_id: QUESTIONNAIRE_AUDIENCE_ID || null,
       respondent: {
         position: state.passport.position.trim(),
         gender: state.passport.gender,
@@ -2475,6 +2477,7 @@ function buildSubmissionPayload() {
   return {
     kind: "questionnaire-response",
     submittedAt: new Date().toISOString(),
+    audienceId: QUESTIONNAIRE_AUDIENCE_ID || null,
     respondent: {
       position: state.passport.position.trim(),
       gender: state.passport.gender,

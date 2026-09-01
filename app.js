@@ -88,6 +88,8 @@ function createInitialState() {
       submittedAt: null,
       submissionMode: null,
       submissionId: null,
+      introToPassportNotificationAt: null,
+      passportCompletedNotificationAt: null,
     },
   };
 }
@@ -208,6 +210,12 @@ function normalizeLoadedState(raw) {
       lastSavedAt: typeof source?.meta?.lastSavedAt === "string" ? source.meta.lastSavedAt : null,
       completedAt: typeof source?.meta?.completedAt === "string" ? source.meta.completedAt : null,
       lastImportedAt: typeof source?.meta?.lastImportedAt === "string" ? source.meta.lastImportedAt : null,
+      introToPassportNotificationAt: typeof source?.meta?.introToPassportNotificationAt === "string"
+        ? source.meta.introToPassportNotificationAt
+        : null,
+      passportCompletedNotificationAt: typeof source?.meta?.passportCompletedNotificationAt === "string"
+        ? source.meta.passportCompletedNotificationAt
+        : null,
     },
   };
 }
@@ -667,11 +675,13 @@ function goStage(nextStage) {
   if (!canJumpToStage(nextStage)) {
     return;
   }
+  const previousStage = state.stage;
   state.stage = nextStage;
   clampCursorForStage();
   saveState();
   render();
   scrollToTop();
+  notifyStageTransition(previousStage, nextStage);
 }
 
 function clampCursorForStage() {
@@ -687,6 +697,7 @@ function advanceStage() {
     return;
   }
 
+  const previousStage = state.stage;
   if (state.stage === "intro") {
     state.stage = "passport";
   } else if (state.stage === "passport") {
@@ -723,6 +734,7 @@ function advanceStage() {
   saveState();
   render();
   scrollToTop();
+  notifyStageTransition(previousStage, state.stage);
 }
 
 function retreatStage() {
@@ -2590,7 +2602,53 @@ function buildEmailTextPayload(payload) {
   };
 }
 
-async function sendResultsByEmail(payload) {
+function buildProgressNotificationPayload(type) {
+  const event = type === "intro-to-passport"
+    ? {
+      name: "Опросник: переход к профилю",
+      message: "Респондент перешёл со страницы «Перед началом» на страницу «Профиль участника».",
+    }
+    : {
+      name: "Опросник: профиль заполнен",
+      message: "Респондент заполнил «Профиль участника» и перешёл к следующему разделу анкеты.",
+    };
+  const audienceLine = QUESTIONNAIRE_AUDIENCE_ID
+    ? `\nИдентификатор аудитории: ${QUESTIONNAIRE_AUDIENCE_ID}`
+    : "";
+
+  return {
+    name: event.name,
+    time: new Date().toLocaleString("ru-RU"),
+    email: "",
+    message: `${event.message}${audienceLine}`,
+  };
+}
+
+function notifyStageTransition(previousStage, nextStage) {
+  const notification = previousStage === "intro" && nextStage === "passport"
+    ? { type: "intro-to-passport", metaKey: "introToPassportNotificationAt" }
+    : previousStage === "passport" && nextStage !== "intro"
+      ? { type: "passport-completed", metaKey: "passportCompletedNotificationAt" }
+      : null;
+
+  if (!notification || state.meta[notification.metaKey]) {
+    return;
+  }
+
+  state.meta[notification.metaKey] = new Date().toISOString();
+  saveState();
+  void sendProgressNotification(notification.type);
+}
+
+async function sendProgressNotification(type) {
+  try {
+    await sendEmailTemplate(buildProgressNotificationPayload(type));
+  } catch (error) {
+    console.warn("Не удалось отправить уведомление о ходе опроса.", error);
+  }
+}
+
+async function sendEmailTemplate(templateParams) {
   if (!EMAILJS_PUBLIC_KEY || !EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID) {
     throw new Error("EmailJS не настроен: проверь service id, template id и public key в config.js");
   }
@@ -2604,7 +2662,7 @@ async function sendResultsByEmail(payload) {
       service_id: EMAILJS_SERVICE_ID,
       template_id: EMAILJS_TEMPLATE_ID,
       user_id: EMAILJS_PUBLIC_KEY,
-      template_params: buildEmailTextPayload(payload),
+      template_params: templateParams,
     }),
   });
 
@@ -2614,6 +2672,10 @@ async function sendResultsByEmail(payload) {
   }
 
   return text;
+}
+
+async function sendResultsByEmail(payload) {
+  return sendEmailTemplate(buildEmailTextPayload(payload));
 }
 
 async function submitResults() {
